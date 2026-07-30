@@ -36,10 +36,8 @@ run :: proc(command: string, options: []string) {
 		// Run install function
 		install_package(home_dir, options)
 	case command == "uninstall":
-	// Validate options
 	// Run uninstall function
 	case command == "update":
-		// Validate options
 		// Run update function
 		update_package(home_dir, options)
 	case command == "list":
@@ -55,5 +53,4 @@ run :: proc(command: string, options: []string) {
 		fmt.printfln("Unknown command: %s\n", command)
 		os.exit(1)
 	}
-
 }

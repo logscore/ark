@@ -6,13 +6,7 @@ import "core:fmt"
 import "core:os"
 import "core:strings"
 
-resolve_repo :: proc(
-	home_dir: string,
-	command: string,
-	repo_data: shared.Repo,
-	lock_data: shared.Lock_Data,
-	force: bool,
-) -> string {
+resolve_repo_to_sha :: proc(home_dir: string, repo_data: shared.Repo) -> string {
 	repos_dir, path_err := os.join_path({home_dir, ".ark", "repos"}, context.allocator)
 	if path_err != nil {
 		fmt.eprintln("Failed to build .ark repository directory.")
@@ -34,11 +28,11 @@ resolve_repo :: proc(
 	if !repo_exists {
 		ok := clone_bare_copy(repo_data.url, repo_name, repos_dir)
 		if !ok {
-			fmt.printfln("ERROR: failed to clone to target directory: %s", full_repo_dir)
+			// fmt.printfln("ERROR: failed to clone to target directory: %s", full_repo_dir)
 			os.exit(1)
 		}
 
-		fmt.println("Successfully cloned to:", full_repo_dir)
+		fmt.println("\nSuccessfully cloned to:", full_repo_dir)
 	}
 
 	delete(repos_dir, context.allocator)
@@ -55,21 +49,7 @@ resolve_repo :: proc(
 		os.exit(1)
 	}
 
-	// Force bypasses the existing lock entry check. It does not clone
-	// over an existing bare repository.
-	if !force {
-		compare_fetched_sha_to_lock_sha(ref_sha, lock_data)
-	}
-
-	tmp_build_dir, checkout_ok := checkout_to_sha(home_dir, full_repo_dir, ref_sha, repo_data.name)
-	if !checkout_ok {
-		fmt.eprintln("Failed to checkout SHA to temporary build directory.")
-		os.exit(1)
-	}
-	delete(ref_sha, context.allocator)
-	delete(full_repo_dir, context.allocator)
-
-	return tmp_build_dir
+	return ref_sha
 }
 
 clone_bare_copy :: proc(repo_url: string, repo_name: string, repos_dir: string) -> bool {
@@ -202,7 +182,6 @@ compare_fetched_sha_to_lock_sha :: proc(ref_sha: string, lock_data: shared.Lock_
 
 checkout_to_sha :: proc(
 	home_dir: string,
-	full_repo_dir: string,
 	ref_sha: string,
 	package_name: string,
 ) -> (
@@ -217,7 +196,7 @@ checkout_to_sha :: proc(
 		os.exit(1)
 	}
 
-	full_tmp_dir, err := os.mkdir_temp(
+	full_tmp_build_dir, err := os.mkdir_temp(
 		tmp_dir,
 		strings.concatenate({package_name, "-"}),
 		context.allocator,
@@ -226,13 +205,27 @@ checkout_to_sha :: proc(
 		fmt.eprintln("failed to create temp build directory:", err)
 		return "", false
 	}
-	defer delete(full_tmp_dir)
+	defer delete(full_tmp_build_dir)
+
+	repos_dir, path_err := os.join_path({home_dir, ".ark", "repos"}, context.allocator)
+	if path_err != nil {
+		fmt.eprintln("Failed to build .ark repository directory.")
+		os.exit(1)
+	}
+
+	repo_name := strings.concatenate({package_name, ".git"})
+
+	full_repo_dir, repo_path_err := os.join_path({repos_dir, repo_name}, context.allocator)
+	if repo_path_err != nil {
+		fmt.eprintln("Failed to build repository path.")
+		os.exit(1)
+	}
 
 	// git worktree add \
 	//   --detach \
 	//   "$tmp_dir" \
 	//   "$commit" \
-	args := []string{"git", "worktree", "add", "--detach", full_tmp_dir, ref_sha}
+	args := []string{"git", "worktree", "add", "--detach", full_tmp_build_dir, ref_sha}
 
 	p, start_err := os.process_start(
 		os.Process_Desc {
@@ -258,5 +251,5 @@ checkout_to_sha :: proc(
 		os.exit(1)
 	}
 
-	return strings.clone(full_tmp_dir), true
+	return strings.clone(full_tmp_build_dir), true
 }

@@ -41,6 +41,8 @@ install_package :: proc(home_dir: string, options: []string) {
 		spec = "",
 	}
 
+	// If the version is not given, we want to update to the most up to date version, starting with tag, then branch/sha
+	// TODO: we cannot store HEAD as the version as that breaks the lock rule that we cannot have two packages of the same version in the lock. We can store the most recent sha, or most recent tag
 	if opts.version == "" {
 		repo_data.spec = "HEAD"
 	} else {
@@ -51,22 +53,18 @@ install_package :: proc(home_dir: string, options: []string) {
 	// TODO: eventually support bare github.com/user/tool or user/tool
 	scheme, host, full_path, _, _ := net.split_url(url)
 
-	fmt.println(host, full_path)
-
+	base_path := strings.split(full_path, "@")[0]
 	if scheme == "" && strings.starts_with(host, "git@") {
 		repo_data.url = strings.concatenate({host, strings.split(full_path, "@")[0]})
 	} else if scheme == "https" {
-		repo_data.url = strings.concatenate({scheme, "://", host})
+		repo_data.url = strings.concatenate({scheme, "://", host, base_path})
 	} else {
 		fmt.printfln("Invalid repo url: %s\n", url)
 		help.print_help("install")
 		os.exit(1)
 	}
 
-	fmt.println(repo_data.url)
-
-	base := strings.split(full_path, "@")[0]
-	base = strings.trim_suffix(base, ".git")
+	base := strings.trim_suffix(base_path, ".git")
 	path_tokens := strings.split(base, "/")
 	repo_data.name = path_tokens[len(path_tokens) - 1]
 
@@ -76,14 +74,93 @@ install_package :: proc(home_dir: string, options: []string) {
 		os.exit(1)
 	}
 
-	// Process out to git, clone to .ark/cache
-	tmp_build_dir := git.resolve_repo(home_dir, "install", repo_data, lock_data, opts.force)
+	// Process out to git, clone to .ark/cache, fetch refs, find desired ref, return ref sha
+	ref_sha := git.resolve_repo_to_sha(home_dir, repo_data)
 
-	// run builder
-	fmt.println("Running builder")
-	// run installer
-	fmt.println("Running installer")
-	// run lock updater
-	fmt.println("Updating lock")
+	installed := make([dynamic]shared.Entry)
+	for line in lock_data.data {
+		if line.name == repo_data.name && line.sha == ref_sha {
+			append(&installed, line)
+		}
+	}
+	defer delete(installed)
 
+	// Is sha in lock?
+	if len(installed) == 1 {
+		// Is artifact on disk?
+		active_version := shared.resolve_binary_version(home_dir, installed[0].binary)
+		if active_version != "" {
+			// Is --force true?
+			if opts.force {
+				// pull build and install
+				tmp_build_dir, checkout_ok := git.checkout_to_sha(
+					home_dir,
+					ref_sha,
+					repo_data.name,
+				)
+				if !checkout_ok {
+					fmt.eprintln(
+						"Failed to checkout ref %s to temporary build directory.",
+						ref_sha[:7],
+					)
+					os.exit(1)
+				}
+
+				// run builder
+				fmt.println("Running builder")
+				// run installer
+				fmt.println("Running installer")
+				// run lock updater
+				fmt.println("Updating lock")
+			} else {
+				// tell the user its installed and to switch with ark use
+				fmt.printfln(
+					"Package '%[1]s' of version '%[2]s' is already installed.\n\nPass --force to bypass this check or run 'ark use %[1]s <version>' to switch to your desired version.",
+					repo_data.name,
+					active_version,
+				)
+				os.exit(1)
+			}
+			// Is artifact not on disk?
+		} else {
+			// warn the user, and build, and install anyways
+			fmt.printfln(
+				"Package '%[1]s of version '%[2]s is in lock file, but no binary can be found. Installing package from lock file...'",
+				repo_data.name,
+				installed[0].version,
+			)
+
+			tmp_build_dir, checkout_ok := git.checkout_to_sha(home_dir, ref_sha, repo_data.name)
+			if !checkout_ok {
+				fmt.eprintln(
+					"Failed to checkout ref %s to temporary build directory.",
+					ref_sha[:7],
+				)
+				os.exit(1)
+			}
+
+			// run builder
+			fmt.println("Running builder")
+			// run installer
+			fmt.println("Running installer")
+			// run lock updater
+			fmt.println("Updating lock")
+
+		}
+		// Sha is not in lock. New version
+	} else {
+		// checkout to spec, build, append lock file, install
+		tmp_build_dir, checkout_ok := git.checkout_to_sha(home_dir, ref_sha, repo_data.name)
+		if !checkout_ok {
+			fmt.eprintln("Failed to checkout SHA to temporary build directory.")
+			os.exit(1)
+		}
+
+		// run builder
+		fmt.println("Running builder")
+		// run installer
+		fmt.println("Running installer")
+		// run lock updater
+		fmt.println("Updating lock")
+	}
 }

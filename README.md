@@ -63,8 +63,8 @@ initing ark
 commands
 
 - install <repo_url> --force: pulls, builds and installs the tool based on the repo_url. Force ignores the hash comparison block and pulls, rebuilds and reinstalls.
-- uninstall <tool@version>: uinstalls the tool. version is optional. Without it, we uninstall all instances of the tool. Might add a warning and --force command to the multi instance uninsnstall
-- update <tool> --version <tagged_version> --force: updates the tool to hte most recent version. --version specifies the version to udate to (can be a lower version too. --force updates even if the version is already installed
+- uninstall <tool@version>: uinstalls the tool. version is optional. Without it, we uninstall all instances of the tool. Might add a warning and --force command to the multi instance uninsnstall.
+- update <tool> --version <tagged_version> --force: updates the tool to hte most recent version. --version specifies the version to udate to (can be a lower version too. --force updates even if the version is already installed. Note on the lock file <> disk relationship when updating a package. Lock is the install(ed) intent. It tells us what the user wants on the system. The disk is the cache. Lock hit + disk cache miss is rebuildable. So we rebuild from that lock repo + sha.
 - list <tool@version>: lists all the tools, displaying the active one with "* active" along side thier paths and repo source + commit sha. Version is optional and will only display that version.
 - set <tool@version>: sets active tool to that version. Will eventually add a rollback command which holds a kv of previously set versions in /tmp/ark so you can run ark rollback <tool> and itll rollback instantly to hte previous version
 - build <path_to_project> --with <whatever_build_command> --no-cache-tools: autodetects the projects tooling and builds with defined build script. --with overrides the autodetection and tries to run the build with that command. --no-cache-tools writes tool to .ark/tools/<tool>/<version> and deletes when build finishes. Its for CI pipelines (not in MVP).

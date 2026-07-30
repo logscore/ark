@@ -5,7 +5,12 @@
     "request": "launch",
     "program": "${ZED_WORKTREE_ROOT}/bin/ark",
     "cwd": "${ZED_WORKTREE_ROOT}",
-    "args": ["install", "https://github.com/logscore/roxy.git@v1.0.0"],
+    "args": [
+      "install",
+      "https://github.com/logscore/pervie.git",
+      "--version",
+      "v1.0.0",
+    ],
     "build": {
       "command": "odin",
       "args": ["build", ".", "-debug", "-o:none", "-out:bin/ark"],
