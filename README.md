@@ -11,7 +11,7 @@ git based platform agnostic package manager
 7. move artifact to .ark/builds/tool-name/version, create .ark/bin/tool-name and symlink it to the builds binary.
 8. write tool name, tag/version, commit sha, binary hash, repo, and bin name to one line in .ark/ark.lock
 
-Lock file
+## Lock file
 
 It is a unix style file with one tool per line. we can have multiple versions by denoting the active one b resolving the symlink
 
@@ -26,7 +26,7 @@ ark install ... installs binary, flips symlink, leaves old version alone. Check 
 ark use tool@<version> finds in lock, flips symlink using the version. We cant have the same version in the lock file. Maybe we can remove the commit sha field, or keep it as a verifier against a shifty tag.
 ark uninstall ... removes symlink and deletes line from file. Deleting specific version only removes that version, moves symlink to newest neighbor. unspecified will delete all of them with a warning. -y will bypass warning.
 
-the .ark dir
+## the .ark dir
 
 ```text
 .ark/
@@ -52,7 +52,7 @@ the .ark dir
   ark.lock # The lock file (see above for details)
 ```
 
-initing ark
+## initing ark
 
 3 ways (im undecided):
 
@@ -60,7 +60,7 @@ initing ark
 2. dedicated ark init that will create the .ark dir, and append .ark/bin to .bashrc (should prompt for that permission and print the command if they say no)
 3. lazy init on the first command (install, list, uninstall, set, clean)
 
-commands
+## commands
 
 - install <repo_url> --force: pulls, builds and installs the tool based on the repo_url. Force ignores the hash comparison block and pulls, rebuilds and reinstalls.
 - uninstall <tool@version>: uinstalls the tool. version is optional. Without it, we uninstall all instances of the tool. Might add a warning and --force command to the multi instance uninsnstall.
@@ -69,7 +69,7 @@ commands
 - set <tool@version>: sets active tool to that version. Will eventually add a rollback command which holds a kv of previously set versions in /tmp/ark so you can run ark rollback <tool> and itll rollback instantly to hte previous version
 - build <path_to_project> --with <whatever_build_command> --no-cache-tools: autodetects the projects tooling and builds with defined build script. --with overrides the autodetection and tries to run the build with that command. --no-cache-tools writes tool to .ark/tools/<tool>/<version> and deletes when build finishes. Its for CI pipelines (not in MVP).
 
-build tools
+## build tools
 
 support go, rust, zig, bun, make
 
@@ -86,7 +86,7 @@ build tool resolution chain:
 5. Versions are exact. rust@1.81 means 1.81.0, not latest 1.81. We require the user to specify the version. Later we can add a latest resolve flow.
 6. Run installs in parallel. Show "provisioning xyz..." on first install
 
-the ark.json file
+## the ark.json file
 
 It has one job. How do i build this repo into a binary and where do i stick the binary?
 
