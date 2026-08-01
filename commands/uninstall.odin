@@ -7,6 +7,7 @@ import "core:flags"
 import "core:fmt"
 import "core:os"
 import "core:slice"
+import "core:strings"
 
 Uninstall_Options :: struct {
 	version: string `args: "name=version"`,
@@ -66,13 +67,15 @@ uninstall_package :: proc(ark_dir: string, options: []string) {
 
 	// If the user specified a version, find that version. Capture value and remove from array
 	found_entry: shared.Entry
+	found_index: int
 	if opts.version != "" {
 		found := false
 		for entry, index in installed {
 			if entry.version == opts.version {
 				found_entry = entry
+				found_index = index
 				// Remove the desired version from the array here.
-				unordered_remove(&installed, index)
+				ordered_remove(&installed, index)
 				found = true
 				break
 			}
@@ -99,18 +102,66 @@ uninstall_package :: proc(ark_dir: string, options: []string) {
 		)
 		// if symlink version != ""
 		if resolved_active_linked_file != "" {
-			// delete the symlink
-			os.remove(resolved_active_linked_file)
+			// delete the symlink. We dont need to handle errors here as we know the symlink exists and ark clean can clean the orphaned file
+			_ = os.remove_all(resolved_active_linked_file)
 		}
-		// 		delete the ~/.ark/build/<package_name>/<version>
-		// 		delete ~/.ark/repo/<package_name>.git
-		// 		remove the package entries data from the lock file
-		// 	If remaining array >= 1
-		// 		if requested version to uninstall is the same as the symlink version
-		// 			TODO: Below is very temporary, we will give the user the navigable select screen to pick the version they want to be active after uninstal
-		// 			set the symlinked version as the most recent version.
-		// 		delete ~/.ark/build/<package_name>/<version>
-		// 		remove the package entry data from the lock file
+
+		// delete the ~/.ark/build/<package_name>/<version>
+		versioned_build_dir, _ := os.join_path(
+			{ark_dir, "build", package_name, opts.version},
+			context.allocator,
+		)
+		os.remove(versioned_build_dir)
+		delete(versioned_build_dir)
+
+		// delete ~/.ark/repo/<package_name>.git
+		package_git_repo_dir, _ := os.join_path(
+			{ark_dir, "repo", strings.concatenate({package_name, ".git"})},
+			context.allocator,
+		)
+		os.remove(package_git_repo_dir)
+		delete(package_git_repo_dir)
+
+		// remove the package entries data from the lock file
+		for entry, index in lock_data.data {
+			if entry.name == package_name && entry.version == found_entry.version {
+				ordered_remove(&lock_data.data, index)
+			}
+		}
+
+		// Write to lock file
+		if !shared.write_lock(ark_dir, lock_data.data[:]) {
+			fmt.println("ERROR: failed to write ark.lock")
+			os.exit(1)
+		}
+	} else if len(installed) >= 1 {
+		// If there are more than one package of that name...
+
+		//
+		split_linked_path := strings.split(resolved_active_linked_file, "/")
+		// if requested version to uninstall is the same as the symlink version
+		if split_linked_path[len(split_linked_path) - 2] == opts.version {
+			// TODO: Below is very temporary, we will give the user the navigable select screen to pick the version they want to be active after uninstal
+			// set the symlinked version as the most recent version.
+			new_binary_to_link, _ := os.join_path(
+				{
+					ark_dir,
+					"build",
+					package_name,
+					installed[found_index + 1].version,
+					installed[found_index + 1].binary,
+				},
+			)
+			new_symlink_path, _ := os.join_path(
+				{ark_dir, "bin", installed[found_index + 1].binary},
+				context.allocator,
+			)
+
+			_ = os.symlink(new_binary_to_link, new_symlink_path)
+
+			delete(new_binary_to_link)
+			delete(new_symlink_path)
+		}
 		// else
 	} else {
 		// 	if symlink version != ""

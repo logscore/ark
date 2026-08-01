@@ -93,6 +93,30 @@ read_lock :: proc(ark_dir: string) -> (lock_data: Lock_Data, ok: bool) {
 	return lock_data, true
 }
 
+write_lock :: proc(ark_dir: string, entries: []Entry) -> bool {
+	sb: strings.Builder
+	strings.builder_init(&sb)
+	defer strings.builder_destroy(&sb)
+
+	for e in entries {
+		fmt.sbprintf(
+			&sb,
+			"%s %s %s %s %s %d\n",
+			e.name,
+			e.version,
+			e.sha,
+			e.repo,
+			e.binary,
+			e.timestamp,
+		)
+	}
+
+	lock_path, _ := os.join_path({ark_dir, "ark.lock"}, context.allocator)
+	defer delete(lock_path)
+
+	return os.write_entire_file(lock_path, transmute([]byte)strings.to_string(sb))
+}
+
 read_user_config :: proc(home_dir: string) -> (User_Config, bool) {
 	// Read user config from ~/.ark into memory
 	user_config_path, user_config_path_error := os.join_path(

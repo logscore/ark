@@ -91,8 +91,8 @@ update_package :: proc(ark_dir: string, options: []string) {
 	}
 
 	// Sha is in lock. Is the artifact on disk?
-	active_version := shared.resolve_symlink_to_path(ark_dir, matched.binary)
-	if active_version == "" {
+	resolved_active_linked_file := shared.resolve_symlink_to_path(ark_dir, matched.binary)
+	if resolved_active_linked_file == "" {
 		fmt.printfln(
 			"Package '%[1]s' of version '%[2]s' is in lock file, but no binary can be found. Installing from lock file...",
 			package_name,

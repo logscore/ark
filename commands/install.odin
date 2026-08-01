@@ -88,16 +88,12 @@ install_package :: proc(ark_dir: string, options: []string) {
 	// Is sha in lock?
 	if len(installed) == 1 {
 		// Is artifact on disk?
-		active_version := shared.resolve_symlink_to_path(ark_dir, installed[0].binary)
-		if active_version != "" {
+		resolved_active_linked_file := shared.resolve_symlink_to_path(ark_dir, installed[0].binary)
+		if resolved_active_linked_file != "" {
 			// Is --force true?
 			if opts.force {
 				// pull build and install
-				tmp_build_dir, checkout_ok := git.checkout_to_sha(
-					ark_dir,
-					ref_sha,
-					repo_data.name,
-				)
+				tmp_build_dir, checkout_ok := git.checkout_to_sha(ark_dir, ref_sha, repo_data.name)
 				if !checkout_ok {
 					fmt.eprintln(
 						"Failed to checkout ref %s to temporary build directory.",
@@ -117,7 +113,7 @@ install_package :: proc(ark_dir: string, options: []string) {
 				fmt.printfln(
 					"Package '%[1]s' of version '%[2]s' is already installed.\n\nPass --force to bypass this check or run 'ark use %[1]s <version>' to switch to your desired version.",
 					repo_data.name,
-					active_version,
+					opts.version,
 				)
 				os.exit(1)
 			}
