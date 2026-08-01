@@ -52,9 +52,9 @@ run :: proc(command: string, options: []string) {
 	case command == "list":
 	// Validate options
 	// run list function
-	case command == "set":
-	// Validate options
-	// run set function
+	case command == "use":
+		// Validate options
+		use_package(ark_dir, options)
 	case command == "build":
 	//validate options
 	// run build function

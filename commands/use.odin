@@ -1,0 +1,93 @@
+package commands
+
+import "core:fmt"
+import "core:os"
+import "core:strings"
+
+import help "../help"
+import shared "../shared"
+
+Use_Options :: struct {}
+
+// TODO: Eventually we will add --global (default), --local, and --shell
+use_package :: proc(ark_dir: string, options: []string) {
+	// validate inputs
+	if len(options) < 2 {
+		fmt.println("Invalid usage:\n")
+		help.print_help("use")
+		os.exit(1)
+	}
+
+	package_name := options[0]
+	version := options[1]
+
+	if package_name == "--help" {
+		help.print_help("use")
+		os.exit(0)
+	}
+
+	// Check that the package exists.
+	lock_data, lock_ok := shared.read_lock(ark_dir)
+	if !lock_ok {
+		os.exit(1)
+	}
+
+	installed: shared.Entry
+	found: bool
+	for line in lock_data.data {
+		if line.name == package_name && line.version == version {
+			installed = line
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		fmt.printfln(
+			"Package %[0]s of version '%[1]s' is not installed. To install, run:\n\n    ark install <repo_url>/%[0]s.git --version %[1]s\n\n",
+			package_name,
+			version,
+		)
+		os.exit(1)
+	}
+
+	// Check that the current active version isnt the version requested
+	current_active_version_path := shared.resolve_symlink_to_path(ark_dir, installed.binary)
+
+	// Check that the build directory exists that we're linking
+	// If not there, do we build and install it?
+	split_linked_path := strings.split(current_active_version_path, "/")
+	defer delete(split_linked_path)
+
+	new_binary_file_to_link, new_build_dir_err := os.join_path(
+		{ark_dir, "build", package_name, version, installed.binary},
+		context.allocator,
+	)
+	if new_build_dir_err != .None {
+		fmt.println("ERROR: failed to construct build directory during existence check")
+		os.exit(0)
+	}
+
+	if !shared.check_file_or_folder_exists(new_binary_file_to_link) {
+		fmt.printfln(
+			"%[0]s of version %[1]s does not exist. To install, run:\n\n    ark install %[2]s --version %[1]s\n\n",
+			package_name,
+			version,
+			installed.repo,
+		)
+		os.exit(1)
+	}
+
+	active_version := split_linked_path[len(split_linked_path) - 2]
+	if active_version == version {
+		fmt.printfln("%[0]s of version %[1]s is already active.", package_name, version)
+	}
+
+	new_link_path, r := os.join_path({ark_dir, "bin", installed.binary}, context.allocator)
+
+	// swap the symlink
+	if err := os.symlink(new_binary_file_to_link, new_link_path); err != nil {
+		fmt.printfln("ERROR: failed to relink %s: %v", installed.binary, err)
+		os.exit(1)
+	}
+}

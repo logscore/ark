@@ -53,15 +53,14 @@ Arguments:
 Options:
   --version <version>  List a specific version of the specified package.
 `,
-	"set"       = `Usage: ark set <package_name> <version>
+	"use"       = `Usage: ark use <package_name> <version>
 
 Set the active version of a tool.
 
-Updates the symlink in ~/.ark/bin. No rebuild is required, so switching
-versions is immediate.
+Updates the symlink in ~/.ark/bin. No rebuild is required, so switching versions is immediate.
 
 Arguments:
-  <package_name>		Package to activate
+  <package_name>	Package to activate
   <version>             Version of the specified package to activate
 `,
 	"build"     = `Usage: ark build <path> [--with <cmd>] [--no-cache-tools]
@@ -103,7 +102,7 @@ Commands:
     List installed versions of a package.
     --version <version>  List a specific installed version.
 
-  set <package_name> <version>
+  use <package_name> <version>
     Set the active version of a package.
     Updates the symlink in ~/.ark/bin. No rebuild is required.
 

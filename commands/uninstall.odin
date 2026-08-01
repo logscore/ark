@@ -33,6 +33,8 @@ uninstall_package :: proc(ark_dir: string, options: []string) {
 	if len(arg_flags) != 0 {
 		flags.parse(&opts, arg_flags, .Unix)
 	}
+	
+	// TODO: If the user gives us --version but no version, error out with "Invalid usage"
 
 	lock_data, lock_ok := shared.read_lock(ark_dir)
 	if !lock_ok {
@@ -55,7 +57,7 @@ uninstall_package :: proc(ark_dir: string, options: []string) {
 
 		// TODO: uncomment when clean is implemented
 		// build_dir := filepath.join({home_dir, ".ark", "build", package_name})
-		// repo_dir := filepath.join({home_dir, ".ark", "repo", package_name + ".git"})
+		// repo_dir := filepath.join({home_dir, ".ark", "repos", package_name + ".git"})
 
 		// if os.exists(build_dir) || os.exists(repo_dir) {
 		// 	fmt.println("stale files found, run 'ark clean' to remove them")
@@ -76,7 +78,7 @@ uninstall_package :: proc(ark_dir: string, options: []string) {
 	defer delete(symlink_path)
 
 	package_git_repo_dir, _ := os.join_path(
-		{ark_dir, "repo", strings.concatenate({package_name, ".git"})},
+		{ark_dir, "repos", strings.concatenate({package_name, ".git"})},
 		context.allocator,
 	)
 	defer delete(package_git_repo_dir)
@@ -86,14 +88,10 @@ uninstall_package :: proc(ark_dir: string, options: []string) {
 		if resolved_active_linked_file != "" {
 			_ = os.remove(symlink_path)
 		}
-		for entry in installed {
-			versioned_build_dir, _ := os.join_path(
-				{ark_dir, "build", package_name, entry.version},
-				context.allocator,
-			)
-			os.remove_all(versioned_build_dir)
-			delete(versioned_build_dir)
-		}
+		package_build_dir, _ := os.join_path({ark_dir, "build", package_name}, context.allocator)
+		os.remove_all(package_build_dir)
+		delete(package_build_dir)
+
 		os.remove_all(package_git_repo_dir)
 
 		// remove all package entries from the lock file
@@ -146,8 +144,7 @@ uninstall_package :: proc(ark_dir: string, options: []string) {
 	if len(installed) == 0 {
 		// last version available
 		fmt.printfln(
-			"%[0]s is the last version available for %[1]s. After uninstall %[1]s wont be available.",
-			opts.version,
+			"%[0]s is the last version available for %[1]s. After uninstall %[1]s wont be available.",			opts.version,
 			package_name,
 		)
 		if resolved_active_linked_file != "" {
