@@ -5,6 +5,7 @@ import "core:fmt"
 import "core:net"
 import "core:os"
 import "core:strings"
+import "core:time"
 
 import git "../git"
 import help "../help"
@@ -70,16 +71,17 @@ install_package :: proc(ark_dir: string, options: []string) {
 
 	lock_data, lock_ok := shared.read_lock(ark_dir)
 	if !lock_ok {
-		fmt.println("ERROR: failed to read ark.lock file")
 		os.exit(1)
 	}
 
 	// Process out to git, clone to .ark/cache, fetch refs, find desired ref, return ref sha
 	ref_sha := git.resolve_repo_to_sha(ark_dir, repo_data)
 
+	installed_index: int
 	installed := make([dynamic]shared.Entry)
-	for line in lock_data.data {
+	for line, index in lock_data.data {
 		if line.name == repo_data.name && line.sha == ref_sha {
+			installed_index = index
 			append(&installed, line)
 		}
 	}
@@ -108,6 +110,23 @@ install_package :: proc(ark_dir: string, options: []string) {
 				fmt.println("Running installer")
 				// run lock updater
 				fmt.println("Updating lock")
+				// Force build means we replace the lock entry.
+				// ? Is there a more efficient way to do this instead of shadowing the data index Entry??
+				// TODO: double check that these values are accurate as the builder may pull in new install instruction from the user config, and things like the binary name might be different
+				lock_data.data[installed_index] = shared.Entry {
+					lock_data.data[installed_index].name,
+					lock_data.data[installed_index].version,
+					lock_data.data[installed_index].sha,
+					lock_data.data[installed_index].repo,
+					// TODO: add in the binary title from the builder
+					lock_data.data[installed_index].binary,
+					time.to_unix_seconds(time.now()),
+				}
+
+				if !shared.write_lock(ark_dir, lock_data.data[:]) {
+					fmt.println("ERROR: failed to write ark.lock")
+					os.exit(1)
+				}
 			} else {
 				// tell the user its installed and to switch with ark use
 				fmt.printfln(
@@ -121,7 +140,7 @@ install_package :: proc(ark_dir: string, options: []string) {
 		} else {
 			// warn the user, and build, and install anyways
 			fmt.printfln(
-				"Package '%[1]s of version '%[2]s is in lock file, but no binary can be found. Installing package from lock file...'",
+				"Package '%[0]s' of version '%[1]s' is in lock file, but no binary can be found. Installing package from lock file...\n",
 				repo_data.name,
 				installed[0].version,
 			)
@@ -141,10 +160,24 @@ install_package :: proc(ark_dir: string, options: []string) {
 			fmt.println("Running installer")
 			// run lock updater
 			fmt.println("Updating lock")
+			// Like with --force, we overwrite the value with the new installed timestamp
+			// TODO: double check that these values are accurate as the builder may pull in new install instruction from the user config, and things like the binary name might be different
+			lock_data.data[installed_index] = shared.Entry {
+				lock_data.data[installed_index].name,
+				lock_data.data[installed_index].version,
+				lock_data.data[installed_index].sha,
+				lock_data.data[installed_index].repo,
+				// TODO: add in the binary title from the builder
+				lock_data.data[installed_index].binary,
+				time.to_unix_seconds(time.now()),
+			}
 
+			if !shared.write_lock(ark_dir, lock_data.data[:]) {
+				fmt.println("ERROR: failed to write ark.lock")
+				os.exit(1)
+			}
 		}
-		// Sha is not in lock. New version
-	} else {
+	} else { 	// Sha is not in lock. New version
 		// checkout to spec, build, append lock file, install
 		tmp_build_dir, checkout_ok := git.checkout_to_sha(ark_dir, ref_sha, repo_data.name)
 		if !checkout_ok {
@@ -158,5 +191,23 @@ install_package :: proc(ark_dir: string, options: []string) {
 		fmt.println("Running installer")
 		// run lock updater
 		fmt.println("Updating lock")
+
+		append(
+			&lock_data.data,
+			shared.Entry {
+				repo_data.name,
+				repo_data.spec,
+				ref_sha,
+				repo_data.url,
+				// TODO: add in the binary title from the builder
+				repo_data.name,
+				time.to_unix_seconds(time.now()),
+			},
+		)
+
+		if !shared.write_lock(ark_dir, lock_data.data[:]) {
+			fmt.println("ERROR: failed to write ark.lock")
+			os.exit(1)
+		}
 	}
 }

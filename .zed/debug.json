@@ -22,7 +22,7 @@
         "request": "launch",
         "program": "${ZED_WORKTREE_ROOT}/bin/ark",
         "cwd": "${ZED_WORKTREE_ROOT}",
-        "args": ["update", "roxy"],
+        "args": ["update", "pervie"],
         "build": {
             "command": "odin",
             "args": ["build", ".", "-debug", "-o:none", "-out:bin/ark"]
@@ -34,7 +34,7 @@
         "request": "launch",
         "program": "${ZED_WORKTREE_ROOT}/bin/ark",
         "cwd": "${ZED_WORKTREE_ROOT}",
-        "args": ["uninstall", "ripgrep", "--version", "15.1.0"],
+        "args": ["uninstall", "pervie"],
         "build": {
             "command": "odin",
             "args": ["build", ".", "-debug", "-o:none", "-out:bin/ark"]

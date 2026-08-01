@@ -114,7 +114,9 @@ write_lock :: proc(ark_dir: string, entries: []Entry) -> bool {
 	lock_path, _ := os.join_path({ark_dir, "ark.lock"}, context.allocator)
 	defer delete(lock_path)
 
-	return os.write_entire_file(lock_path, transmute([]byte)strings.to_string(sb))
+	file_write_err := os.write_entire_file(lock_path, transmute([]byte)strings.to_string(sb))
+
+	return file_write_err == nil
 }
 
 read_user_config :: proc(home_dir: string) -> (User_Config, bool) {

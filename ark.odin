@@ -25,4 +25,7 @@ main :: proc() {
 	options := args[2:]
 
 	commands.run(command, options)
+
+	// NOTE: We might want to adjsut the logic paths so that all exits happen here. We can instead return a code and maybe an error and it will surface here. We handle the error and print, then exit with the code
+	os.exit(0)
 }
