@@ -15,17 +15,11 @@ Install_Options :: struct {
 	force:   bool `args: "name=force"`,
 }
 
-install_package :: proc(home_dir: string, options: []string) {
+install_package :: proc(ark_dir: string, options: []string) {
 	if len(options) < 1 {
 		fmt.println("Invalid usage:\n")
 		help.print_help("install")
 		os.exit(1)
-	}
-
-	arg_flags := options[1:]
-	opts: Install_Options
-	if len(arg_flags) != 0 {
-		flags.parse(&opts, arg_flags, .Unix)
 	}
 
 	url := options[0]
@@ -33,6 +27,12 @@ install_package :: proc(home_dir: string, options: []string) {
 	if url == "--help" {
 		help.print_help("install")
 		os.exit(0)
+	}
+
+	arg_flags := options[1:]
+	opts: Install_Options
+	if len(arg_flags) != 0 {
+		flags.parse(&opts, arg_flags, .Unix)
 	}
 
 	repo_data := shared.Repo {
@@ -68,14 +68,14 @@ install_package :: proc(home_dir: string, options: []string) {
 	path_tokens := strings.split(base, "/")
 	repo_data.name = path_tokens[len(path_tokens) - 1]
 
-	lock_data, lock_ok := shared.read_lock(home_dir)
+	lock_data, lock_ok := shared.read_lock(ark_dir)
 	if !lock_ok {
 		fmt.println("ERROR: failed to read ark.lock file")
 		os.exit(1)
 	}
 
 	// Process out to git, clone to .ark/cache, fetch refs, find desired ref, return ref sha
-	ref_sha := git.resolve_repo_to_sha(home_dir, repo_data)
+	ref_sha := git.resolve_repo_to_sha(ark_dir, repo_data)
 
 	installed := make([dynamic]shared.Entry)
 	for line in lock_data.data {
@@ -88,13 +88,13 @@ install_package :: proc(home_dir: string, options: []string) {
 	// Is sha in lock?
 	if len(installed) == 1 {
 		// Is artifact on disk?
-		active_version := shared.resolve_binary_version(home_dir, installed[0].binary)
+		active_version := shared.resolve_symlink_to_path(ark_dir, installed[0].binary)
 		if active_version != "" {
 			// Is --force true?
 			if opts.force {
 				// pull build and install
 				tmp_build_dir, checkout_ok := git.checkout_to_sha(
-					home_dir,
+					ark_dir,
 					ref_sha,
 					repo_data.name,
 				)
@@ -130,7 +130,7 @@ install_package :: proc(home_dir: string, options: []string) {
 				installed[0].version,
 			)
 
-			tmp_build_dir, checkout_ok := git.checkout_to_sha(home_dir, ref_sha, repo_data.name)
+			tmp_build_dir, checkout_ok := git.checkout_to_sha(ark_dir, ref_sha, repo_data.name)
 			if !checkout_ok {
 				fmt.eprintln(
 					"Failed to checkout ref %s to temporary build directory.",
@@ -150,7 +150,7 @@ install_package :: proc(home_dir: string, options: []string) {
 		// Sha is not in lock. New version
 	} else {
 		// checkout to spec, build, append lock file, install
-		tmp_build_dir, checkout_ok := git.checkout_to_sha(home_dir, ref_sha, repo_data.name)
+		tmp_build_dir, checkout_ok := git.checkout_to_sha(ark_dir, ref_sha, repo_data.name)
 		if !checkout_ok {
 			fmt.eprintln("Failed to checkout SHA to temporary build directory.")
 			os.exit(1)

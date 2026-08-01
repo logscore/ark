@@ -13,7 +13,7 @@ Update_Options :: struct {
 	version: string `args: "name=version"`,
 }
 
-update_package :: proc(home_dir: string, options: []string) {
+update_package :: proc(ark_dir: string, options: []string) {
 	if len(options) < 1 {
 		fmt.println("Invalid usage:\n")
 		help.print_help("update")
@@ -21,6 +21,11 @@ update_package :: proc(home_dir: string, options: []string) {
 	}
 
 	package_name := options[0]
+	if package_name == "--help" {
+		help.print_help("update")
+		os.exit(0)
+	}
+
 	arg_flags := options[1:]
 
 	opts: Update_Options
@@ -28,12 +33,7 @@ update_package :: proc(home_dir: string, options: []string) {
 		flags.parse(&opts, arg_flags, .Unix)
 	}
 
-	if package_name == "--help" {
-		help.print_help("update")
-		os.exit(0)
-	}
-
-	lock_data, lock_ok := shared.read_lock(home_dir)
+	lock_data, lock_ok := shared.read_lock(ark_dir)
 	if !lock_ok {
 		fmt.println("ERROR: failed to read ark.lock file")
 		os.exit(1)
@@ -61,7 +61,7 @@ update_package :: proc(home_dir: string, options: []string) {
 
 	// NOTE: two repos publishing the same tool name isn't handled yet; install blocks that case for now
 	ref_sha := git.resolve_repo_to_sha(
-		home_dir,
+		ark_dir,
 		shared.Repo{installed[0].repo, package_name, want_version},
 	)
 
@@ -78,7 +78,7 @@ update_package :: proc(home_dir: string, options: []string) {
 
 	if !found {
 		// New version, not yet in lock
-		tmp_build_dir, checkout_ok := git.checkout_to_sha(home_dir, ref_sha, package_name)
+		tmp_build_dir, checkout_ok := git.checkout_to_sha(ark_dir, ref_sha, package_name)
 		if !checkout_ok {
 			fmt.eprintln("Failed to checkout SHA to temporary build directory.")
 			os.exit(1)
@@ -91,7 +91,7 @@ update_package :: proc(home_dir: string, options: []string) {
 	}
 
 	// Sha is in lock. Is the artifact on disk?
-	active_version := shared.resolve_binary_version(home_dir, matched.binary)
+	active_version := shared.resolve_symlink_to_path(ark_dir, matched.binary)
 	if active_version == "" {
 		fmt.printfln(
 			"Package '%[1]s' of version '%[2]s' is in lock file, but no binary can be found. Installing from lock file...",
@@ -99,7 +99,7 @@ update_package :: proc(home_dir: string, options: []string) {
 			matched.version,
 		)
 
-		tmp_build_dir, checkout_ok := git.checkout_to_sha(home_dir, ref_sha, package_name)
+		tmp_build_dir, checkout_ok := git.checkout_to_sha(ark_dir, ref_sha, package_name)
 		if !checkout_ok {
 			fmt.eprintfln("Failed to checkout ref %s to temporary build directory.", ref_sha[:7])
 			os.exit(1)
@@ -120,7 +120,7 @@ update_package :: proc(home_dir: string, options: []string) {
 		os.exit(1)
 	}
 
-	tmp_build_dir, checkout_ok := git.checkout_to_sha(home_dir, ref_sha, package_name)
+	tmp_build_dir, checkout_ok := git.checkout_to_sha(ark_dir, ref_sha, package_name)
 	if !checkout_ok {
 		fmt.eprintfln("Failed to checkout ref %s to temporary build directory.", ref_sha[:7])
 		os.exit(1)

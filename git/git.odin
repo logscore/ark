@@ -6,8 +6,8 @@ import "core:fmt"
 import "core:os"
 import "core:strings"
 
-resolve_repo_to_sha :: proc(home_dir: string, repo_data: shared.Repo) -> string {
-	repos_dir, path_err := os.join_path({home_dir, ".ark", "repos"}, context.allocator)
+resolve_repo_to_sha :: proc(ark_dir: string, repo_data: shared.Repo) -> string {
+	repos_dir, path_err := os.join_path({ark_dir, "repos"}, context.allocator)
 	if path_err != nil {
 		fmt.eprintln("Failed to build .ark repository directory.")
 		os.exit(1)
@@ -21,7 +21,7 @@ resolve_repo_to_sha :: proc(home_dir: string, repo_data: shared.Repo) -> string 
 		os.exit(1)
 	}
 
-	repo_exists := shared.check_file_or_folder_exists(home_dir, {"repos", repo_name})
+	repo_exists := shared.check_file_or_folder_exists(full_repo_dir)
 
 	// The repository cache is independent from whether the package is
 	// already installed. Clone only when the cache does not exist.
@@ -180,15 +180,8 @@ compare_fetched_sha_to_lock_sha :: proc(ref_sha: string, lock_data: shared.Lock_
 	return
 }
 
-checkout_to_sha :: proc(
-	home_dir: string,
-	ref_sha: string,
-	package_name: string,
-) -> (
-	string,
-	bool,
-) {
-	tmp_dir, tmp_dir_error := os.join_path({home_dir, ".ark", "tmp"}, context.allocator)
+checkout_to_sha :: proc(ark_dir: string, ref_sha: string, package_name: string) -> (string, bool) {
+	tmp_dir, tmp_dir_error := os.join_path({ark_dir, "tmp"}, context.allocator)
 	defer delete(tmp_dir, context.allocator)
 
 	if tmp_dir_error != nil {
@@ -207,7 +200,8 @@ checkout_to_sha :: proc(
 	}
 	defer delete(full_tmp_build_dir)
 
-	repos_dir, path_err := os.join_path({home_dir, ".ark", "repos"}, context.allocator)
+	repos_dir, path_err := os.join_path({ark_dir, "repos"}, context.allocator)
+	defer delete(repos_dir)
 	if path_err != nil {
 		fmt.eprintln("Failed to build .ark repository directory.")
 		os.exit(1)

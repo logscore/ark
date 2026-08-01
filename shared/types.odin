@@ -8,11 +8,12 @@ Repo :: struct {
 }
 
 Entry :: struct {
-	name:    string,
-	version: string,
-	sha:     string,
-	repo:    string,
-	binary:  string,
+	name:      string,
+	version:   string,
+	sha:       string,
+	repo:      string,
+	binary:    string,
+	timestamp: i64,
 }
 
 Lock_Data :: struct {

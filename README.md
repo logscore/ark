@@ -16,10 +16,10 @@ git based platform agnostic package manager
 It is a unix style file with one tool per line. we can have multiple versions by denoting the active one b resolving the symlink
 
 ```text
-# name version commit source bin
-mytool v1.2.3 a1b2c3d github.com/user/mytool mytool
-mytool v1.2.2 e5f6g7h github.com/user/mytool mytool
-rg 14.1.0 f1a2b3c github.com/BurntSushi/ripgrep rg
+# name version commit source bin installed_timestamp
+mytool v1.2.3 a1b2c3d github.com/user/mytool mytool 123456
+mytool v1.2.2 e5f6g7h github.com/user/mytool mytool 123567
+rg 14.1.0 f1a2b3c github.com/BurntSushi/ripgrep rg 124567
 ```
 
 ark install ... installs binary, flips symlink, leaves old version alone. Check that version doesnt already exist. If it does and the commit sha is different, prompt to rebuild with new sha. Override that verson in the lock. No symlink switch necessary.
@@ -92,21 +92,21 @@ It has one job. How do i build this repo into a binary and where do i stick the 
 
 ```json
 {
-  "$schema": "https://lsreeder.com/ark/schema.json",
-  "packages": [
-    {
-      "name": "mypackage",
-      "build": {
-        "build_tool": "cargo",
-        "version": "1.81.0",
-        "args": ["build", "--release"],
-        "env": {
-          "FEATURE": "production"
+    "$schema": "https://lsreeder.com/ark/schema.json",
+    "packages": [
+        {
+            "name": "mypackage",
+            "build": {
+                "build_tool": "cargo",
+                "version": "1.81.0",
+                "args": ["build", "--release"],
+                "env": {
+                    "FEATURE": "production"
+                }
+            },
+            // Note that the name of the binary file will be what is used in the terminal. "name" is what the user uses to manage the package.
+            "out": "target/release/pkg"
         }
-      },
-      // Note that the name of the binary file will be what is used in the terminal. "name" is what the user uses to manage the package.
-      "out": "target/release/pkg"
-    }
-  ]
+    ]
 }
 ```

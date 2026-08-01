@@ -1,31 +1,43 @@
 [
-  {
-    "label": "Debug Install",
-    "adapter": "CodeLLDB",
-    "request": "launch",
-    "program": "${ZED_WORKTREE_ROOT}/bin/ark",
-    "cwd": "${ZED_WORKTREE_ROOT}",
-    "args": [
-      "install",
-      "https://github.com/logscore/pervie.git",
-      "--version",
-      "v1.0.0",
-    ],
-    "build": {
-      "command": "odin",
-      "args": ["build", ".", "-debug", "-o:none", "-out:bin/ark"],
+    {
+        "label": "Debug Install",
+        "adapter": "CodeLLDB",
+        "request": "launch",
+        "program": "${ZED_WORKTREE_ROOT}/bin/ark",
+        "cwd": "${ZED_WORKTREE_ROOT}",
+        "args": [
+            "install",
+            "https://github.com/logscore/pervie.git",
+            "--version",
+            "v1.0.0"
+        ],
+        "build": {
+            "command": "odin",
+            "args": ["build", ".", "-debug", "-o:none", "-out:bin/ark"]
+        }
     },
-  },
-  {
-    "label": "Debug Update",
-    "adapter": "CodeLLDB",
-    "request": "launch",
-    "program": "${ZED_WORKTREE_ROOT}/bin/ark",
-    "cwd": "${ZED_WORKTREE_ROOT}",
-    "args": ["update", "roxy"],
-    "build": {
-      "command": "odin",
-      "args": ["build", ".", "-debug", "-o:none", "-out:bin/ark"],
+    {
+        "label": "Debug Update",
+        "adapter": "CodeLLDB",
+        "request": "launch",
+        "program": "${ZED_WORKTREE_ROOT}/bin/ark",
+        "cwd": "${ZED_WORKTREE_ROOT}",
+        "args": ["update", "roxy"],
+        "build": {
+            "command": "odin",
+            "args": ["build", ".", "-debug", "-o:none", "-out:bin/ark"]
+        }
     },
-  },
+    {
+        "label": "Debug Uninstall",
+        "adapter": "CodeLLDB",
+        "request": "launch",
+        "program": "${ZED_WORKTREE_ROOT}/bin/ark",
+        "cwd": "${ZED_WORKTREE_ROOT}",
+        "args": ["uninstall", "ripgrep", "--version", "15.1.0"],
+        "build": {
+            "command": "odin",
+            "args": ["build", ".", "-debug", "-o:none", "-out:bin/ark"]
+        }
+    }
 ]

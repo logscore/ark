@@ -1,3 +1,31 @@
 {
-  "format_on_save": "on",
+    "languages": {
+        "Odin": {
+            "format_on_save": "on",
+            "language_servers": ["ols"],
+            "formatter": {
+                "external": {
+                    "command": "odinfmt",
+                    "arguments": ["-stdin"]
+                }
+            }
+        }
+    },
+    "lsp": {
+        "ols": {
+            "binary": {
+                "path": "ols"
+            },
+            "initialization_options": {
+                "enable_hover": true,
+                "enable_snippets": true,
+                "enable_procedure_snippet": true,
+                "enable_completion_matching": true,
+                "enable_references": true,
+                "enable_document_symbols": true,
+                "enable_format": true,
+                "enable_document_links": true
+            }
+        }
+    }
 }

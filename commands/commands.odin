@@ -14,11 +14,19 @@ run :: proc(command: string, options: []string) {
 		os.exit(1)
 	}
 
+	// TODO: pull this out to a lazy project init function
 	// check dirs & lock exist
 	items_to_check := [5]string{"build", "repos", "tmp", "bin", "ark.lock"}
 
+	// TODO: error handling for the jon_path on ALL join_path invokations
+	ark_dir, _ := os.join_path({home_dir, ".ark"}, context.allocator)
+	defer delete(ark_dir)
+
 	for item in items_to_check {
-		if !shared.check_file_or_folder_exists(home_dir, []string{item}) {
+		path_to_check, _ := os.join_path({ark_dir, item}, context.allocator)
+		defer delete(path_to_check)
+
+		if !shared.check_file_or_folder_exists(path_to_check) {
 			// TODO: lazy init the .ark directory and its sub dirs/files
 			// fmt.eprintln(`ERROR: .ark directory is not initialized properly. Please run "ark init" to setup ark.`)
 			fmt.eprintln(
@@ -34,12 +42,13 @@ run :: proc(command: string, options: []string) {
 	// 	init_ark(options)
 	case command == "install":
 		// Run install function
-		install_package(home_dir, options)
+		install_package(ark_dir, options)
 	case command == "uninstall":
-	// Run uninstall function
+		// Run uninstall function
+		uninstall_package(ark_dir, options)
 	case command == "update":
 		// Run update function
-		update_package(home_dir, options)
+		update_package(ark_dir, options)
 	case command == "list":
 	// Validate options
 	// run list function

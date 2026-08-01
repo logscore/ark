@@ -2,10 +2,7 @@
 package commands
 
 import "core:flags"
-import "core:fmt"
 import "core:os"
-import "core:strings"
-
 
 Init_Options :: struct {
 	force:       bool `args: "name=force" usage: "Writes over existing .ark folders and files"`,
