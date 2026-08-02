@@ -12,28 +12,27 @@ import help "../help"
 import shared "../shared"
 
 Install_Options :: struct {
-	version: string `args: "name=version" `,
-	force:   bool `args: "name=force"`,
+	repo_url: string `args:"name=git_url,pos=0,required"`,
+	version:  string `args:"name=version"`,
+	force:    bool `args:"name=force"`,
 }
 
 install_package :: proc(ark_dir: string, options: []string) {
-	if len(options) < 1 {
-		fmt.println("Invalid usage:\n")
-		help.print_help("install")
-		os.exit(1)
-	}
-
-	url := options[0]
-
-	if url == "--help" {
+	opts: Install_Options
+	err := flags.parse(&opts, options, .Unix)
+	switch v in err {
+	case flags.Help_Request:
 		help.print_help("install")
 		os.exit(0)
-	}
-
-	arg_flags := options[1:]
-	opts: Install_Options
-	if len(arg_flags) != 0 {
-		flags.parse(&opts, arg_flags, .Unix)
+	case flags.Parse_Error:
+		fmt.println(v.message)
+		os.exit(1)
+	case flags.Open_File_Error:
+		fmt.println("Could not open", v.filename)
+		os.exit(1)
+	case flags.Validation_Error:
+		fmt.println(v.message)
+		os.exit(1)
 	}
 
 	repo_data := shared.Repo {
@@ -52,7 +51,7 @@ install_package :: proc(ark_dir: string, options: []string) {
 
 	// parse url.
 	// TODO: eventually support bare github.com/user/tool or user/tool
-	scheme, host, full_path, _, _ := net.split_url(url)
+	scheme, host, full_path, _, _ := net.split_url(opts.repo_url)
 
 	base_path := strings.split(full_path, "@")[0]
 	if scheme == "" && strings.starts_with(host, "git@") {
@@ -60,8 +59,7 @@ install_package :: proc(ark_dir: string, options: []string) {
 	} else if scheme == "https" {
 		repo_data.url = strings.concatenate({scheme, "://", host, base_path})
 	} else {
-		fmt.printfln("Invalid repo url: %s\n", url)
-		help.print_help("install")
+		fmt.printfln("Invalid repo url: %s\n", opts.repo_url)
 		os.exit(1)
 	}
 
@@ -76,6 +74,10 @@ install_package :: proc(ark_dir: string, options: []string) {
 
 	// Process out to git, clone to .ark/cache, fetch refs, find desired ref, return ref sha
 	ref_sha := git.resolve_repo_to_sha(ark_dir, repo_data)
+
+	if repo_data.spec == "HEAD" {
+		repo_data.spec = ref_sha[:7]
+	}
 
 	installed_index: int
 	installed := make([dynamic]shared.Entry)

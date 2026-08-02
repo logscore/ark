@@ -1,7 +1,10 @@
 // Unsure if i really even want this yet. We'll leave it wired for now
 package commands
 
+import help "../help"
+
 import "core:flags"
+import "core:fmt"
 import "core:os"
 
 Init_Options :: struct {
@@ -10,11 +13,26 @@ Init_Options :: struct {
 }
 
 init_ark :: proc(options: []string) {
-	init_options: Init_Options
-	flags.parse_or_exit(&init_options, options, .Unix)
+	opts: Init_Options
+	err := flags.parse(&opts, options, .Unix)
+	switch v in err {
+	case flags.Help_Request:
+		help.print_help("init")
+		os.exit(0)
+	case flags.Parse_Error:
+		fmt.println(v.message)
+		os.exit(1)
+	case flags.Open_File_Error:
+		fmt.println("Could not open", v.filename)
+		os.exit(1)
+	case flags.Validation_Error:
+		fmt.println(v.message)
+		os.exit(1)
+	}
 
-	init_ark_dirs(init_options.force)
-	if init_options.add_to_path {
+	init_ark_dirs(opts.force)
+
+	if opts.add_to_path {
 		add_ark_to_path()
 	}
 	os.exit(0)

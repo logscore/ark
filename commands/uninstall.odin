@@ -10,31 +10,26 @@ import "core:slice"
 import "core:strings"
 
 Uninstall_Options :: struct {
-	version: string `args: "name=version"`,
+	package_name: string `args: "name=package,pos=0,required"`,
+	version:      string `args: "name=version"`,
 }
 uninstall_package :: proc(ark_dir: string, options: []string) {
-	// validate inputs
-	if len(options) < 1 {
-		fmt.println("Invalid usage:\n")
-		help.print_help("uninstall")
-		os.exit(1)
-	}
-
-	package_name := options[0]
-	arg_flags := options[1:]
-
-	if package_name == "--help" {
+	opts: Uninstall_Options
+	err := flags.parse(&opts, options, .Unix)
+	switch v in err {
+	case flags.Help_Request:
 		help.print_help("uninstall")
 		os.exit(0)
+	case flags.Parse_Error:
+		fmt.println(v.message)
+		os.exit(1)
+	case flags.Open_File_Error:
+		fmt.println("Could not open", v.filename)
+		os.exit(1)
+	case flags.Validation_Error:
+		fmt.println(v.message)
+		os.exit(1)
 	}
-
-	// TODO: FOR ALL. we need to parse the options and give valid errors saying "Unrecognized flag" if the user passes an unsupported flag
-	opts: Uninstall_Options
-	if len(arg_flags) != 0 {
-		flags.parse(&opts, arg_flags, .Unix)
-	}
-	
-	// TODO: If the user gives us --version but no version, error out with "Invalid usage"
 
 	lock_data, lock_ok := shared.read_lock(ark_dir)
 	if !lock_ok {
@@ -47,13 +42,13 @@ uninstall_package :: proc(ark_dir: string, options: []string) {
 	installed := make([dynamic]shared.Entry)
 	defer delete(installed)
 	for line in lock_data.data {
-		if line.name == package_name {
+		if line.name == opts.package_name {
 			append(&installed, line)
 		}
 	}
 
 	if len(installed) == 0 {
-		fmt.printfln(`%s not installed`, package_name)
+		fmt.printfln(`%s not installed`, opts.package_name)
 
 		// TODO: uncomment when clean is implemented
 		// build_dir := filepath.join({home_dir, ".ark", "build", package_name})
@@ -78,7 +73,7 @@ uninstall_package :: proc(ark_dir: string, options: []string) {
 	defer delete(symlink_path)
 
 	package_git_repo_dir, _ := os.join_path(
-		{ark_dir, "repos", strings.concatenate({package_name, ".git"})},
+		{ark_dir, "repos", strings.concatenate({opts.package_name, ".git"})},
 		context.allocator,
 	)
 	defer delete(package_git_repo_dir)
@@ -88,7 +83,10 @@ uninstall_package :: proc(ark_dir: string, options: []string) {
 		if resolved_active_linked_file != "" {
 			_ = os.remove(symlink_path)
 		}
-		package_build_dir, _ := os.join_path({ark_dir, "build", package_name}, context.allocator)
+		package_build_dir, _ := os.join_path(
+			{ark_dir, "build", opts.package_name},
+			context.allocator,
+		)
 		os.remove_all(package_build_dir)
 		delete(package_build_dir)
 
@@ -98,7 +96,7 @@ uninstall_package :: proc(ark_dir: string, options: []string) {
 		remaining := make([dynamic]shared.Entry)
 		defer delete(remaining)
 		for entry in lock_data.data {
-			if entry.name != package_name {
+			if entry.name != opts.package_name {
 				append(&remaining, entry)
 			}
 		}
@@ -120,13 +118,13 @@ uninstall_package :: proc(ark_dir: string, options: []string) {
 		}
 	}
 	if found_index == -1 {
-		fmt.printfln("%s version %s is not installed", package_name, opts.version)
+		fmt.printfln("%s version %s is not installed", opts.package_name, opts.version)
 		os.exit(1)
 	}
 	unordered_remove(&installed, found_index)
 
 	versioned_build_dir, _ := os.join_path(
-		{ark_dir, "build", package_name, opts.version},
+		{ark_dir, "build", opts.package_name, opts.version},
 		context.allocator,
 	)
 	defer delete(versioned_build_dir)
@@ -135,7 +133,7 @@ uninstall_package :: proc(ark_dir: string, options: []string) {
 	remaining := make([dynamic]shared.Entry)
 	defer delete(remaining)
 	for entry in lock_data.data {
-		if entry.name == package_name && entry.version == found_entry.version {
+		if entry.name == opts.package_name && entry.version == found_entry.version {
 			continue
 		}
 		append(&remaining, entry)
@@ -144,8 +142,9 @@ uninstall_package :: proc(ark_dir: string, options: []string) {
 	if len(installed) == 0 {
 		// last version available
 		fmt.printfln(
-			"%[0]s is the last version available for %[1]s. After uninstall %[1]s wont be available.",			opts.version,
-			package_name,
+			"%[0]s is the last version available for %[1]s. After uninstall %[1]s wont be available.",
+			opts.version,
+			opts.package_name,
 		)
 		if resolved_active_linked_file != "" {
 			_ = os.remove(symlink_path)
@@ -177,7 +176,7 @@ uninstall_package :: proc(ark_dir: string, options: []string) {
 			replacement := installed[replacement_index]
 
 			new_binary_to_link, _ := os.join_path(
-				{ark_dir, "build", package_name, replacement.version, replacement.binary},
+				{ark_dir, "build", opts.package_name, replacement.version, replacement.binary},
 				context.allocator,
 			)
 			defer delete(new_binary_to_link)

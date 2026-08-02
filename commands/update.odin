@@ -9,28 +9,27 @@ import "core:fmt"
 import "core:os"
 
 Update_Options :: struct {
-	force:   bool `args: "name=force"`,
-	version: string `args: "name=version"`,
+	package_name: string `args: "name=package,pos=0,required"`,
+	force:        bool `args: "name=force"`,
+	version:      string `args: "name=version"`,
 }
 
 update_package :: proc(ark_dir: string, options: []string) {
-	if len(options) < 1 {
-		fmt.println("Invalid usage:\n")
-		help.print_help("update")
-		os.exit(1)
-	}
-
-	package_name := options[0]
-	if package_name == "--help" {
+	opts: Update_Options
+	err := flags.parse(&opts, options, .Unix)
+	switch v in err {
+	case flags.Help_Request:
 		help.print_help("update")
 		os.exit(0)
-	}
-
-	arg_flags := options[1:]
-
-	opts: Update_Options
-	if len(arg_flags) != 0 {
-		flags.parse(&opts, arg_flags, .Unix)
+	case flags.Parse_Error:
+		fmt.println(v.message)
+		os.exit(1)
+	case flags.Open_File_Error:
+		fmt.println("Could not open", v.filename)
+		os.exit(1)
+	case flags.Validation_Error:
+		fmt.println(v.message)
+		os.exit(1)
 	}
 
 	lock_data, lock_ok := shared.read_lock(ark_dir)
@@ -44,13 +43,13 @@ update_package :: proc(ark_dir: string, options: []string) {
 	installed := make([dynamic]shared.Entry)
 	defer delete(installed)
 	for line in lock_data.data {
-		if line.name == package_name {
+		if line.name == opts.package_name {
 			append(&installed, line)
 		}
 	}
 
 	if len(installed) == 0 {
-		fmt.printfln(`%s not installed, use 'ark install'`, package_name)
+		fmt.printfln(`%s not installed, use 'ark install'`, opts.package_name)
 		os.exit(1)
 	}
 
@@ -62,7 +61,7 @@ update_package :: proc(ark_dir: string, options: []string) {
 	// NOTE: two repos publishing the same tool name isn't handled yet; install blocks that case for now
 	ref_sha := git.resolve_repo_to_sha(
 		ark_dir,
-		shared.Repo{installed[0].repo, package_name, want_version},
+		shared.Repo{installed[0].repo, opts.package_name, want_version},
 	)
 
 	// Is this sha already in the lock?
@@ -78,7 +77,7 @@ update_package :: proc(ark_dir: string, options: []string) {
 
 	if !found {
 		// New version, not yet in lock
-		tmp_build_dir, checkout_ok := git.checkout_to_sha(ark_dir, ref_sha, package_name)
+		tmp_build_dir, checkout_ok := git.checkout_to_sha(ark_dir, ref_sha, opts.package_name)
 		if !checkout_ok {
 			fmt.eprintln("Failed to checkout SHA to temporary build directory.")
 			os.exit(1)
@@ -95,11 +94,11 @@ update_package :: proc(ark_dir: string, options: []string) {
 	if resolved_active_linked_file == "" {
 		fmt.printfln(
 			"Package '%[1]s' of version '%[2]s' is in lock file, but no binary can be found. Installing from lock file...",
-			package_name,
+			opts.package_name,
 			matched.version,
 		)
 
-		tmp_build_dir, checkout_ok := git.checkout_to_sha(ark_dir, ref_sha, package_name)
+		tmp_build_dir, checkout_ok := git.checkout_to_sha(ark_dir, ref_sha, opts.package_name)
 		if !checkout_ok {
 			fmt.eprintfln("Failed to checkout ref %s to temporary build directory.", ref_sha[:7])
 			os.exit(1)
@@ -114,13 +113,13 @@ update_package :: proc(ark_dir: string, options: []string) {
 	if !opts.force {
 		fmt.printfln(
 			"Package '%[1]s' of version '%[2]s' is already installed.\n\nPass --force to bypass this check or run 'ark use %[1]s <version>' to switch to your desired version.",
-			package_name,
+			opts.package_name,
 			matched.version,
 		)
 		os.exit(1)
 	}
 
-	tmp_build_dir, checkout_ok := git.checkout_to_sha(ark_dir, ref_sha, package_name)
+	tmp_build_dir, checkout_ok := git.checkout_to_sha(ark_dir, ref_sha, opts.package_name)
 	if !checkout_ok {
 		fmt.eprintfln("Failed to checkout ref %s to temporary build directory.", ref_sha[:7])
 		os.exit(1)
