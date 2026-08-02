@@ -247,3 +247,12 @@ checkout_to_sha :: proc(ark_dir: string, ref_sha: string, package_name: string) 
 
 	return strings.clone(full_tmp_build_dir), true
 }
+
+ensure_git :: proc() {
+	_, _, _, error := os.process_exec({command = {"git", "--version"}}, context.allocator)
+
+	if error != nil {
+		fmt.eprintfln("ERROR: git is not installed on system PATH")
+		os.exit(1)
+	}
+}

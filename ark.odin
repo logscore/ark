@@ -12,14 +12,6 @@ main :: proc() {
 		os.exit(1)
 	}
 
-	// Check that git is installed maybe move this to only the git dependant operations (install, update)
-	_, _, _, error := os.process_exec({command = {"git", "--version"}}, context.allocator)
-
-	if error != nil {
-		fmt.eprintfln("ERROR: git is not installed on system PATH")
-		os.exit(1)
-	}
-
 	args := os.args
 	command := args[1]
 	options := args[2:]

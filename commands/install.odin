@@ -17,6 +17,8 @@ Install_Options :: struct {
 }
 
 install_package :: proc(ark_dir: string, options: []string) {
+	git.ensure_git()
+
 	opts: Install_Options
 	err := flags.parse(&opts, options, .Unix)
 	switch v in err {

@@ -14,6 +14,8 @@ Update_Options :: struct {
 }
 
 update_package :: proc(ark_dir: string, options: []string) {
+	git.ensure_git()
+
 	opts: Update_Options
 	err := flags.parse(&opts, options, .Unix)
 	switch v in err {
