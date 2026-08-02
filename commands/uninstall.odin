@@ -1,6 +1,5 @@
 package commands
 
-import help "../help"
 import shared "../shared"
 
 import "core:flags"
@@ -10,15 +9,16 @@ import "core:slice"
 import "core:strings"
 
 Uninstall_Options :: struct {
-	package_name: string `args: "name=package,pos=0,required"`,
-	version:      string `args: "name=version"`,
+	package_name: string `args:"name=package,pos=0,required"`,
+	version:      string `args:"name=version"`,
 }
+
 uninstall_package :: proc(ark_dir: string, options: []string) {
 	opts: Uninstall_Options
 	err := flags.parse(&opts, options, .Unix)
 	switch v in err {
 	case flags.Help_Request:
-		help.print_help("uninstall")
+		shared.print_help("uninstall")
 		os.exit(0)
 	case flags.Parse_Error:
 		fmt.println(v.message)

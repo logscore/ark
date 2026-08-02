@@ -9,7 +9,6 @@ import "core:strings"
 
 import "../shared"
 
-// I do not like this implementation. I would prefer we simply pass in the values in a []string and test dumbly
 check_file_or_folder_exists :: proc(path_to_file_or_folder: string) -> bool {
 	if os.is_dir(path_to_file_or_folder) {
 		return true

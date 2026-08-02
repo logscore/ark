@@ -4,11 +4,11 @@ import "core:fmt"
 import "core:os"
 
 import "commands"
-import "help"
+import "shared"
 
 main :: proc() {
 	if len(os.args) < 2 {
-		fmt.println(help.default_help)
+		fmt.println(shared.default_help)
 		os.exit(1)
 	}
 

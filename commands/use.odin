@@ -1,29 +1,34 @@
 package commands
 
+import "core:flags"
 import "core:fmt"
 import "core:os"
 import "core:strings"
 
-import help "../help"
 import shared "../shared"
 
-Use_Options :: struct {}
+Use_Options :: struct {
+	package_name: string `args:"name=package_name,pos=0,required"`,
+	version:      string `args:"name=version,pos=1,required"`,
+}
 
 // TODO: Eventually we will add --global (default), --local, and --shell
 use_package :: proc(ark_dir: string, options: []string) {
-	// validate inputs
-	if len(options) < 2 {
-		fmt.println("Invalid usage:\n")
-		help.print_help("use")
-		os.exit(1)
-	}
-
-	package_name := options[0]
-	version := options[1]
-
-	if package_name == "--help" {
-		help.print_help("use")
+	opts: Use_Options
+	err := flags.parse(&opts, options, .Unix)
+	switch v in err {
+	case flags.Help_Request:
+		shared.print_help("use")
 		os.exit(0)
+	case flags.Parse_Error:
+		fmt.println(v.message)
+		os.exit(1)
+	case flags.Open_File_Error:
+		fmt.println("Could not open", v.filename)
+		os.exit(1)
+	case flags.Validation_Error:
+		fmt.println(v.message)
+		os.exit(1)
 	}
 
 	// Check that the package exists.
@@ -35,7 +40,7 @@ use_package :: proc(ark_dir: string, options: []string) {
 	installed: shared.Entry
 	found: bool
 	for line in lock_data.data {
-		if line.name == package_name && line.version == version {
+		if line.name == opts.package_name && line.version == opts.version {
 			installed = line
 			found = true
 			break
@@ -44,9 +49,9 @@ use_package :: proc(ark_dir: string, options: []string) {
 
 	if !found {
 		fmt.printfln(
-			"Package %[0]s of version '%[1]s' is not installed. To install, run:\n\n    ark install <repo_url>/%[0]s.git --version %[1]s\n\n",
-			package_name,
-			version,
+			"Package %[0]s of version '%[1]s' is not installed. To install, run:\n\n    ark install <repo_url> --version %[1]s\n\n",
+			opts.package_name,
+			opts.version,
 		)
 		os.exit(1)
 	}
@@ -60,7 +65,7 @@ use_package :: proc(ark_dir: string, options: []string) {
 	defer delete(split_linked_path)
 
 	new_binary_file_to_link, new_build_dir_err := os.join_path(
-		{ark_dir, "build", package_name, version, installed.binary},
+		{ark_dir, "build", opts.package_name, opts.version, installed.binary},
 		context.allocator,
 	)
 	if new_build_dir_err != .None {
@@ -71,16 +76,16 @@ use_package :: proc(ark_dir: string, options: []string) {
 	if !shared.check_file_or_folder_exists(new_binary_file_to_link) {
 		fmt.printfln(
 			"%[0]s of version %[1]s does not exist. To install, run:\n\n    ark install %[2]s --version %[1]s\n\n",
-			package_name,
-			version,
+			opts.package_name,
+			opts.version,
 			installed.repo,
 		)
 		os.exit(1)
 	}
 
 	active_version := split_linked_path[len(split_linked_path) - 2]
-	if active_version == version {
-		fmt.printfln("%[0]s of version %[1]s is already active.", package_name, version)
+	if active_version == opts.version {
+		fmt.printfln("%[0]s of version %[1]s is already active.", opts.package_name, opts.version)
 	}
 
 	new_link_path, r := os.join_path({ark_dir, "bin", installed.binary}, context.allocator)

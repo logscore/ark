@@ -1,15 +1,15 @@
 // Unsure if i really even want this yet. We'll leave it wired for now
 package commands
 
-import help "../help"
-
 import "core:flags"
 import "core:fmt"
 import "core:os"
 
+import "../shared"
+
 Init_Options :: struct {
-	force:       bool `args: "name=force" usage: "Writes over existing .ark folders and files"`,
-	add_to_path: bool `args: "name=add-to-path" usage: "adds ark to user path automatically"`,
+	force:       bool `args:"name=force"`,
+	add_to_path: bool `args:"name=add-to-path"`,
 }
 
 init_ark :: proc(options: []string) {
@@ -17,7 +17,7 @@ init_ark :: proc(options: []string) {
 	err := flags.parse(&opts, options, .Unix)
 	switch v in err {
 	case flags.Help_Request:
-		help.print_help("init")
+		shared.print_help("init")
 		os.exit(0)
 	case flags.Parse_Error:
 		fmt.println(v.message)

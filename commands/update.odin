@@ -1,7 +1,6 @@
 package commands
 
 import git "../git"
-import help "../help"
 import shared "../shared"
 
 import "core:flags"
@@ -9,9 +8,9 @@ import "core:fmt"
 import "core:os"
 
 Update_Options :: struct {
-	package_name: string `args: "name=package,pos=0,required"`,
-	force:        bool `args: "name=force"`,
-	version:      string `args: "name=version"`,
+	package_name: string `args:"name=package,pos=0,required"`,
+	force:        bool `args:"name=force"`,
+	version:      string `args:"name=version"`,
 }
 
 update_package :: proc(ark_dir: string, options: []string) {
@@ -19,7 +18,7 @@ update_package :: proc(ark_dir: string, options: []string) {
 	err := flags.parse(&opts, options, .Unix)
 	switch v in err {
 	case flags.Help_Request:
-		help.print_help("update")
+		shared.print_help("update")
 		os.exit(0)
 	case flags.Parse_Error:
 		fmt.println(v.message)

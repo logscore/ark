@@ -22,10 +22,6 @@ mytool v1.2.2 e5f6g7h github.com/user/mytool mytool 123567
 rg 14.1.0 f1a2b3c github.com/BurntSushi/ripgrep rg 124567
 ```
 
-ark install ... installs binary, flips symlink, leaves old version alone. Check that version doesnt already exist. If it does and the commit sha is different, prompt to rebuild with new sha. Override that verson in the lock. No symlink switch necessary.
-ark use tool@<version> finds in lock, flips symlink using the version. We cant have the same version in the lock file. Maybe we can remove the commit sha field, or keep it as a verifier against a shifty tag.
-ark uninstall ... removes symlink and deletes line from file. Deleting specific version only removes that version, moves symlink to newest neighbor. unspecified will delete all of them with a warning. -y will bypass warning.
-
 ## the .ark dir
 
 ```text
@@ -50,6 +46,7 @@ ark uninstall ... removes symlink and deletes line from file. Deleting specific 
     build-<first_10_chars_of_commit_sha>/
     build-<first_10_chars_of_commit_sha>/
   ark.lock # The lock file (see above for details)
+  ark.json # Global config file (optional)
 ```
 
 ## initing ark

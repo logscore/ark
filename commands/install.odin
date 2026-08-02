@@ -8,7 +8,6 @@ import "core:strings"
 import "core:time"
 
 import git "../git"
-import help "../help"
 import shared "../shared"
 
 Install_Options :: struct {
@@ -22,7 +21,7 @@ install_package :: proc(ark_dir: string, options: []string) {
 	err := flags.parse(&opts, options, .Unix)
 	switch v in err {
 	case flags.Help_Request:
-		help.print_help("install")
+		shared.print_help("install")
 		os.exit(0)
 	case flags.Parse_Error:
 		fmt.println(v.message)
