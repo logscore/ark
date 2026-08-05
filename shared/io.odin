@@ -1,8 +1,10 @@
+
 #+feature dynamic-literals
 package shared
 
 import "core:encoding/json"
 import "core:fmt"
+import "core:io"
 import "core:os"
 import "core:strconv"
 import "core:strings"
@@ -118,10 +120,13 @@ write_lock :: proc(ark_dir: string, entries: []Entry) -> bool {
 	return file_write_err == nil
 }
 
-read_user_config :: proc(home_dir: string) -> (User_Config, bool) {
-	// Read user config from ~/.ark into memory
+read_user_config :: proc(ark_dir: string) -> (User_Config, bool) {
+	// Walk from local to the .ark generated ark.json to the .git repo provided one
+
+	first_found_config: string
+	// Read user config into memory
 	user_config_path, user_config_path_error := os.join_path(
-		{home_dir, ".ark", "ark.json"},
+		{ark_dir, "ark.json"},
 		context.allocator,
 	)
 	defer delete(user_config_path, context.allocator)
@@ -131,20 +136,17 @@ read_user_config :: proc(home_dir: string) -> (User_Config, bool) {
 		return User_Config{}, false
 	}
 
-	user_config_file, read_user_config_error := os.read_entire_file_from_path(
+	user_config_file, user_config_error := os.read_entire_file_from_path(
 		user_config_path,
 		context.allocator,
 	)
 	defer delete(user_config_file, context.allocator)
 
-	if read_user_config_error != nil {
-		switch {
-		case read_user_config_error == .Not_Exist:
-			// Create it in a non blocking thread
-			fmt.println("Local user build config file not set.")
-		case:
-			return User_Config{}, false
-		}
+	if user_config_error != nil {
+		// TODO: eventually handle all the error cases
+		// Create it in a non blocking thread
+		fmt.println("Local user build config file not set.")
+		return User_Config{}, false
 	}
 
 	config: User_Config
