@@ -121,7 +121,8 @@ uninstall_package :: proc(ark_dir: string, options: []string) {
 		fmt.printfln("%s version %s is not installed", opts.package_name, opts.version)
 		os.exit(1)
 	}
-	unordered_remove(&installed, found_index)
+
+	ordered_remove(&installed, found_index)
 
 	versioned_build_dir, _ := os.join_path(
 		{ark_dir, "build", opts.package_name, opts.version},

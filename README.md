@@ -2,15 +2,6 @@
 
 git based platform agnostic package manager
 
-1. ark install https://github.com/user/tool@tag.version
-2. calls out to git cli, pulls into .ark/repos
-3. use existing config for repo (match on urls?), use repo owner config, autodetect build system (Makefile, mason, package.json, cargo.toml, etc)
-4. run configured/detected build command. We may support uvx style tool caching based on a "requires" config field, or just check the tool exists on PATH and error if not.
-5. build in .ark/cache
-6. ensure build artifact exists as defined by the build artifact config field
-7. move artifact to .ark/builds/tool-name/version, create .ark/bin/tool-name and symlink it to the builds binary.
-8. write tool name, tag/version, commit sha, binary hash, repo, and bin name to one line in .ark/ark.lock
-
 ## Lock file
 
 It is a unix style file with one tool per line. we can have multiple versions by denoting the active one b resolving the symlink
@@ -36,7 +27,7 @@ rg 14.1.0 f1a2b3c github.com/BurntSushi/ripgrep rg 124567
       v14.5.6/
         rg
   repos/
-    <repo>.git # Dirty, holds the git clones, refs and tags
+    <repo_url_hash>.git # Dirty, holds the git clones, refs and tags
   bin/ # symlinks to build/ dir binaries
     rg
     tool
@@ -49,21 +40,13 @@ rg 14.1.0 f1a2b3c github.com/BurntSushi/ripgrep rg 124567
   ark.json # Global config file (optional)
 ```
 
-## initing ark
-
-3 ways (im undecided):
-
-1. at install time. The install script creates .ark with empty dirs and ark.lock file. Appends .ark/bin to .bashrc
-2. dedicated ark init that will create the .ark dir, and append .ark/bin to .bashrc (should prompt for that permission and print the command if they say no)
-3. lazy init on the first command (install, list, uninstall, set, clean)
-
 ## commands
 
-- install <repo_url> --force: pulls, builds and installs the tool based on the repo_url. Force ignores the hash comparison block and pulls, rebuilds and reinstalls.
-- uninstall <tool@version>: uinstalls the tool. version is optional. Without it, we uninstall all instances of the tool. Might add a warning and --force command to the multi instance uninsnstall.
+- install <repo_url>  [--version <version>] [--force]: pulls, builds and installs the tool based on the repo_url. Force ignores the hash comparison block and pulls, rebuilds and reinstalls.
+- uninstall <tool> [--version <version>]: uinstalls the tool. version is optional. Without it, we uninstall all instances of the tool. Might add a warning and --force command to the multi instance uninsnstall.
 - update <tool> --version <tagged_version> --force: updates the tool to hte most recent version. --version specifies the version to udate to (can be a lower version too. --force updates even if the version is already installed. Note on the lock file <> disk relationship when updating a package. Lock is the install(ed) intent. It tells us what the user wants on the system. The disk is the cache. Lock hit + disk cache miss is rebuildable. So we rebuild from that lock repo + sha.
-- list <tool@version>: lists all the tools, displaying the active one with "* active" along side thier paths and repo source + commit sha. Version is optional and will only display that version.
-- set <tool@version>: sets active tool to that version. Will eventually add a rollback command which holds a kv of previously set versions in /tmp/ark so you can run ark rollback <tool> and itll rollback instantly to hte previous version
+- list <tool> [--version <version>]: lists all the tools, displaying the active one with "* active" along side thier paths and repo source + commit sha. Version is optional and will only display that version.
+- use <tool> [--version <version>]: sets active tool to that version. Will eventually add a rollback command which holds a kv of previously set versions in /tmp/ark so you can run ark rollback <tool> and itll rollback instantly to hte previous version
 - build <path_to_project> --with <whatever_build_command> --no-cache-tools: autodetects the projects tooling and builds with defined build script. --with overrides the autodetection and tries to run the build with that command. --no-cache-tools writes tool to .ark/tools/<tool>/<version> and deletes when build finishes. Its for CI pipelines (not in MVP).
 
 ## build tools
@@ -89,7 +72,7 @@ It has one job. How do i build this repo into a binary and where do i stick the 
 
 ```json
 {
-    "$schema": "https://lsreeder.com/ark/schema.json",
+    "$schema": "https://lsreeder.com/ark/schema.json", // or local path
     "packages": [
         {
             "name": "mypackage",

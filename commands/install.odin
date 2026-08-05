@@ -133,7 +133,7 @@ install_package :: proc(ark_dir: string, options: []string) {
 			} else {
 				// tell the user its installed and to switch with ark use
 				fmt.printfln(
-					"Package '%[1]s' of version '%[2]s' is already installed.\n\nPass --force to bypass this check or run 'ark use %[1]s <version>' to switch to your desired version.",
+					"Package '%[0]s' of version '%[1]s' is already installed.\n\nPass --force to bypass this check or run 'ark use %[0]s <version>' to switch to your desired version.",
 					repo_data.name,
 					opts.version,
 				)

@@ -140,7 +140,6 @@ read_user_config :: proc(ark_dir: string) -> (User_Config, bool) {
 		user_config_path,
 		context.allocator,
 	)
-	defer delete(user_config_file, context.allocator)
 
 	if user_config_error != nil {
 		// TODO: eventually handle all the error cases
@@ -151,6 +150,7 @@ read_user_config :: proc(ark_dir: string) -> (User_Config, bool) {
 
 	config: User_Config
 	err := json.unmarshal(user_config_file, &config)
+	defer delete(user_config_file, context.allocator)
 
 	return config, true
 }

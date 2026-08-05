@@ -59,11 +59,20 @@ use_package :: proc(ark_dir: string, options: []string) {
 	// Check that the current active version isnt the version requested
 	current_active_version_path := shared.resolve_symlink_to_path(ark_dir, installed.binary)
 
-	// Check that the build directory exists that we're linking
-	// If not there, do we build and install it?
-	split_linked_path := strings.split(current_active_version_path, "/")
-	defer delete(split_linked_path)
+	if current_active_version_path != "" {
+		split_linked_path := strings.split(current_active_version_path, "/")
+		defer delete(split_linked_path)
 
+		// check that the current linked version is different from the requested version
+		active_version := split_linked_path[len(split_linked_path) - 2]
+		if active_version == opts.version {
+			fmt.printfln(
+				"%[0]s of version %[1]s is already active.",
+				opts.package_name,
+				opts.version,
+			)
+		}
+	}
 	new_binary_file_to_link, new_build_dir_err := os.join_path(
 		{ark_dir, "build", opts.package_name, opts.version, installed.binary},
 		context.allocator,
@@ -81,11 +90,6 @@ use_package :: proc(ark_dir: string, options: []string) {
 			installed.repo,
 		)
 		os.exit(1)
-	}
-
-	active_version := split_linked_path[len(split_linked_path) - 2]
-	if active_version == opts.version {
-		fmt.printfln("%[0]s of version %[1]s is already active.", opts.package_name, opts.version)
 	}
 
 	new_link_path, r := os.join_path({ark_dir, "bin", installed.binary}, context.allocator)
