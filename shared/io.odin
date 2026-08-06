@@ -38,6 +38,40 @@ resolve_symlink_to_path :: proc(ark_dir: string, binary_name: string) -> string 
 	return strings.clone(resolved_path)
 }
 
+// Path of a single installed build artifact. Returns OS specific path to artifact.
+artifact_path :: proc(ark_dir, name, version, binary: string) -> string {
+	path, path_error := os.join_path({ark_dir, "build", name, version, binary}, context.allocator)
+	if path_error != nil {
+		fmt.eprintln("ERROR: failed to build artifact path:", path_error)
+		os.exit(1)
+	}
+
+	return path
+}
+
+// Is the artifact of this exact version on disk? Checks its a file, not dir
+artifact_exists :: proc(ark_dir, name, version, binary: string) -> bool {
+	path := artifact_path(ark_dir, name, version, binary)
+	defer delete(path)
+
+	return os.is_file(path)
+}
+
+// Does bin/<binary> point at this exact version? The compare is valid because
+// every link holds an absolute artifact_path value.
+is_active_version :: proc(ark_dir, name, version, binary: string) -> bool {
+	link_target := resolve_symlink_to_path(ark_dir, binary)
+	if link_target == "" {
+		return false
+	}
+	defer delete(link_target)
+
+	path := artifact_path(ark_dir, name, version, binary)
+	defer delete(path)
+
+	return link_target == path
+}
+
 read_lock :: proc(ark_dir: string) -> (lock_data: Lock_Data, ok: bool) {
 	ark_lock_path, ark_lock_path_error := os.join_path({ark_dir, "ark.lock"}, context.allocator)
 	defer delete(ark_lock_path, context.allocator)
@@ -155,7 +189,11 @@ read_user_config :: proc(ark_dir: string) -> (User_Config, bool) {
 	return config, true
 }
 
-relink_binary_atomic :: proc(ark_dir: string, binary_name: string, new_target: string) -> os.Error {
+relink_binary_atomic :: proc(
+	ark_dir: string,
+	binary_name: string,
+	new_target: string,
+) -> os.Error {
 	// Atomic relinking for symlink
 	new_file, _ := os.join_path({ark_dir, "bin", binary_name}, context.allocator)
 	tmp_file := strings.concatenate({new_file, ".tmp"})
@@ -167,7 +205,7 @@ relink_binary_atomic :: proc(ark_dir: string, binary_name: string, new_target: s
 	// TODO: Error handling?
 	os.remove(tmp_file)
 
-	if err := os.symlink(new_file, tmp_file); err != nil {
+	if err := os.symlink(new_target, tmp_file); err != nil {
 		fmt.printfln("ERROR: failed to create symlink %s: %v", binary_name, err)
 		return err
 	}

@@ -92,9 +92,10 @@ install_package :: proc(ark_dir: string, options: []string) {
 
 	// Is sha in lock?
 	if len(installed) == 1 {
-		// Is artifact on disk?
-		resolved_active_linked_file := shared.resolve_symlink_to_path(ark_dir, installed[0].binary)
-		if resolved_active_linked_file != "" {
+		entry := installed[0]
+
+		// Is the artifact of this exact version on disk?
+		if shared.artifact_exists(ark_dir, entry.name, entry.version, entry.binary) {
 			// Is --force true?
 			if opts.force {
 				// pull build and install
@@ -132,13 +133,29 @@ install_package :: proc(ark_dir: string, options: []string) {
 				// run installer
 				fmt.println("Running installer")
 			} else {
-				// tell the user its installed and to switch with ark use
+				// The version is on disk. Activate it, or report that it is active.
+				if shared.is_active_version(ark_dir, entry.name, entry.version, entry.binary) {
+					fmt.printfln(
+						"Package '%[0]s' of version '%[1]s' is already installed and active.\n\nPass --force to rebuild it.",
+						entry.name,
+						entry.version,
+					)
+					os.exit(1)
+				}
+
+				target := shared.artifact_path(ark_dir, entry.name, entry.version, entry.binary)
+				defer delete(target)
+
+				if relink_err := shared.relink_binary_atomic(ark_dir, entry.binary, target);
+				   relink_err != nil {
+					os.exit(1)
+				}
+
 				fmt.printfln(
-					"Package '%[0]s' of version '%[1]s' is already installed.\n\nPass --force to bypass this check or run 'ark use %[0]s <version>' to switch to your desired version.",
-					repo_data.name,
-					opts.version,
+					"Package '%[0]s' of version '%[1]s' is installed. It is now active.",
+					entry.name,
+					entry.version,
 				)
-				os.exit(1)
 			}
 			// Is artifact not on disk?
 		} else {

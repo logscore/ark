@@ -90,11 +90,10 @@ update_package :: proc(ark_dir: string, options: []string) {
 		return
 	}
 
-	// Sha is in lock. Is the artifact on disk?
-	resolved_active_linked_file := shared.resolve_symlink_to_path(ark_dir, matched.binary)
-	if resolved_active_linked_file == "" {
+	// Sha is in lock. Is the artifact of this exact version on disk?
+	if !shared.artifact_exists(ark_dir, matched.name, matched.version, matched.binary) {
 		fmt.printfln(
-			"Package '%[1]s' of version '%[2]s' is in lock file, but no binary can be found. Installing from lock file...",
+			"Package '%[0]s' of version '%[1]s' is in lock file, but no binary can be found. Installing from lock file...",
 			opts.package_name,
 			matched.version,
 		)
@@ -112,12 +111,30 @@ update_package :: proc(ark_dir: string, options: []string) {
 	}
 
 	if !opts.force {
+		// The version is on disk. Activate it, or report that it is active.
+		if shared.is_active_version(ark_dir, matched.name, matched.version, matched.binary) {
+			fmt.printfln(
+				"Package '%[0]s' of version '%[1]s' is already installed and active.\n\nPass --force to rebuild it.",
+				opts.package_name,
+				matched.version,
+			)
+			os.exit(1)
+		}
+
+		target := shared.artifact_path(ark_dir, matched.name, matched.version, matched.binary)
+		defer delete(target)
+
+		if relink_err := shared.relink_binary_atomic(ark_dir, matched.binary, target);
+		   relink_err != nil {
+			os.exit(1)
+		}
+
 		fmt.printfln(
-			"Package '%[1]s' of version '%[2]s' is already installed.\n\nPass --force to bypass this check or run 'ark use %[1]s <version>' to switch to your desired version.",
+			"Package '%[0]s' of version '%[1]s' is installed. It is now active.",
 			opts.package_name,
 			matched.version,
 		)
-		os.exit(1)
+		return
 	}
 
 	tmp_build_dir, checkout_ok := git.checkout_to_sha(ark_dir, ref_sha, opts.package_name)

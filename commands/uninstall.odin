@@ -170,15 +170,17 @@ uninstall_package :: proc(ark_dir: string, options: []string) {
 		   split_linked_path[len(split_linked_path) - 2] == opts.version {
 			// TODO: Below is very temporary, we will give the user the navigable. This does undesired behavior that needs documentation to understand and i dont like that.
 			// select screen to pick the version they want to be active after uninstall
-			replacement_index :=
-				found_index + 1 < len(installed) ? found_index + 1 : found_index - 1
+			// installed no longer holds the removed version, so every entry after
+			// found_index moved down by one place. The next older version is now at
+			// found_index. Clamp, because the removed version can be the last entry,
+			// and we dont want a out of bounds error.
+			replacement := installed[min(found_index, len(installed) - 1)]
 
-			// index will always be >= 0
-			replacement := installed[replacement_index]
-
-			new_binary_to_link, _ := os.join_path(
-				{ark_dir, "build", opts.package_name, replacement.version, replacement.binary},
-				context.allocator,
+			new_binary_to_link := shared.artifact_path(
+				ark_dir,
+				opts.package_name,
+				replacement.version,
+				replacement.binary,
 			)
 			defer delete(new_binary_to_link)
 
@@ -187,7 +189,6 @@ uninstall_package :: proc(ark_dir: string, options: []string) {
 				replacement.binary,
 				new_binary_to_link,
 			); relink_err != nil {
-				fmt.eprintfln("ERROR: failed to relink %s: %v", replacement.binary, err)
 				os.exit(1)
 			}
 		}

@@ -3,7 +3,6 @@ package commands
 import "core:flags"
 import "core:fmt"
 import "core:os"
-import "core:strings"
 
 import shared "../shared"
 
@@ -56,33 +55,13 @@ use_package :: proc(ark_dir: string, options: []string) {
 		os.exit(1)
 	}
 
-	// Check that the current active version isnt the version requested
-	current_active_version_path := shared.resolve_symlink_to_path(ark_dir, installed.binary)
-
-	if current_active_version_path != "" {
-		split_linked_path := strings.split(current_active_version_path, "/")
-		defer delete(split_linked_path)
-
-		// check that the current linked version is different from the requested version
-		active_version := split_linked_path[len(split_linked_path) - 2]
-		if active_version == opts.version {
-			fmt.printfln(
-				"%[0]s of version %[1]s is already active.",
-				opts.package_name,
-				opts.version,
-			)
-		}
-	}
-	new_binary_file_to_link, new_build_dir_err := os.join_path(
-		{ark_dir, "build", opts.package_name, opts.version, installed.binary},
-		context.allocator,
-	)
-	if new_build_dir_err != .None {
-		fmt.println("ERROR: failed to construct build directory during existence check")
-		os.exit(0)
+	// Is the requested version already the active one?
+	if shared.is_active_version(ark_dir, opts.package_name, opts.version, installed.binary) {
+		fmt.printfln("%[0]s of version %[1]s is already active.", opts.package_name, opts.version)
+		return
 	}
 
-	if !shared.check_file_or_folder_exists(new_binary_file_to_link) {
+	if !shared.artifact_exists(ark_dir, opts.package_name, opts.version, installed.binary) {
 		fmt.printfln(
 			"%[0]s of version %[1]s does not exist. To install, run:\n\n    ark install %[2]s --version %[1]s\n\n",
 			opts.package_name,
@@ -92,12 +71,19 @@ use_package :: proc(ark_dir: string, options: []string) {
 		os.exit(1)
 	}
 
+	new_binary_file_to_link := shared.artifact_path(
+		ark_dir,
+		opts.package_name,
+		opts.version,
+		installed.binary,
+	)
+	defer delete(new_binary_file_to_link)
+
 	if relink_err := shared.relink_binary_atomic(
 		ark_dir,
 		installed.binary,
 		new_binary_file_to_link,
 	); relink_err != nil {
-		fmt.eprintfln("ERROR: failed to relink %s: %v", installed.binary, relink_err)
 		os.exit(1)
 	}
 }
