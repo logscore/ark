@@ -154,3 +154,28 @@ read_user_config :: proc(ark_dir: string) -> (User_Config, bool) {
 
 	return config, true
 }
+
+relink_binary_atomic :: proc(ark_dir: string, binary_name: string, new_target: string) -> os.Error {
+	// Atomic relinking for symlink
+	new_file, _ := os.join_path({ark_dir, "bin", binary_name}, context.allocator)
+	tmp_file := strings.concatenate({new_file, ".tmp"})
+
+	defer delete(new_file)
+	defer delete(tmp_file)
+
+	// clears stale tmp
+	// TODO: Error handling?
+	os.remove(tmp_file)
+
+	if err := os.symlink(new_file, tmp_file); err != nil {
+		fmt.printfln("ERROR: failed to create symlink %s: %v", binary_name, err)
+		return err
+	}
+	if err := os.rename(tmp_file, new_file); err != nil {
+		os.remove(tmp_file)
+		fmt.printfln("ERROR: failed to relink %s: %v", binary_name, err)
+		return err
+	}
+
+	return nil
+}

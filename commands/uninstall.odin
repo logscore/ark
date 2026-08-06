@@ -182,9 +182,13 @@ uninstall_package :: proc(ark_dir: string, options: []string) {
 			)
 			defer delete(new_binary_to_link)
 
-			_ = os.remove(symlink_path)
-			if err := os.symlink(new_binary_to_link, symlink_path); err != nil {
-				fmt.printfln("ERROR: failed to relink %s: %v", replacement.binary, err)
+			if relink_err := shared.relink_binary_atomic(
+				ark_dir,
+				replacement.binary,
+				new_binary_to_link,
+			); relink_err != nil {
+				fmt.eprintfln("ERROR: failed to relink %s: %v", replacement.binary, err)
+				os.exit(1)
 			}
 		}
 	}

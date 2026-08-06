@@ -1,7 +1,6 @@
 package commands
 
-import "../shared"
-
+import shared "../shared"
 import "core:fmt"
 import "core:os"
 
@@ -14,14 +13,18 @@ run :: proc(command: string, options: []string) {
 		os.exit(1)
 	}
 
-	// TODO: error handling for the jon_path on ALL join_path invokations
+	// TODO: error handling for the join_path on ALL join_path invokations
 	ark_dir, _ := os.join_path({home_dir, ".ark"}, context.allocator)
 	defer delete(ark_dir)
 
+	if !shared.check_file_or_folder_exists(ark_dir) {
+		fmt.println("Ark is not initialized globally. Run 'ark init' to initialize Ark.")
+	}
+
 	switch {
 	// For later if it is needed
-	// case command == "init":
-	// 	init_ark(ark_dir, options)
+	case command == "init":
+		init_ark(ark_dir, options)
 	case command == "install":
 		// Run install function
 		install_package(ark_dir, options)
@@ -40,6 +43,8 @@ run :: proc(command: string, options: []string) {
 	case command == "build":
 	//validate options
 	// run build function
+	case command == "--help" || command == "help":
+		shared.print_help("")
 	case:
 		fmt.printfln("Unknown command: %s\n", command)
 		os.exit(1)

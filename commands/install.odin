@@ -109,8 +109,6 @@ install_package :: proc(ark_dir: string, options: []string) {
 
 				// run builder
 				fmt.println("Running builder")
-				// run installer
-				fmt.println("Running installer")
 				// run lock updater
 				fmt.println("Updating lock")
 				// Force build means we replace the lock entry.
@@ -130,6 +128,9 @@ install_package :: proc(ark_dir: string, options: []string) {
 					fmt.println("ERROR: failed to write ark.lock")
 					os.exit(1)
 				}
+
+				// run installer
+				fmt.println("Running installer")
 			} else {
 				// tell the user its installed and to switch with ark use
 				fmt.printfln(
@@ -159,19 +160,18 @@ install_package :: proc(ark_dir: string, options: []string) {
 
 			// run builder
 			fmt.println("Running builder")
-			// run installer
-			fmt.println("Running installer")
 			// run lock updater
 			fmt.println("Updating lock")
 			// Like with --force, we overwrite the value with the new installed timestamp
 			// TODO: double check that these values are accurate as the builder may pull in new install instruction from the user config, and things like the binary name might be different
-			lock_data.data[installed_index] = shared.Entry {
-				lock_data.data[installed_index].name,
-				lock_data.data[installed_index].version,
-				lock_data.data[installed_index].sha,
-				lock_data.data[installed_index].repo,
+			installed_entry: shared.Entry = lock_data.data[installed_index]
+			installed_entry = shared.Entry {
+				installed_entry.name,
+				installed_entry.version,
+				installed_entry.sha,
+				installed_entry.repo,
 				// TODO: add in the binary title from the builder
-				lock_data.data[installed_index].binary,
+				installed_entry.binary,
 				time.to_unix_seconds(time.now()),
 			}
 
@@ -179,6 +179,9 @@ install_package :: proc(ark_dir: string, options: []string) {
 				fmt.println("ERROR: failed to write ark.lock")
 				os.exit(1)
 			}
+
+			// run installer
+			fmt.println("Running installer")
 		}
 	} else { 	// Sha is not in lock. New version
 		// checkout to spec, build, append lock file, install
@@ -190,11 +193,8 @@ install_package :: proc(ark_dir: string, options: []string) {
 
 		// run builder
 		fmt.println("Running builder")
-		// run installer
-		fmt.println("Running installer")
 		// run lock updater
 		fmt.println("Updating lock")
-
 		append(
 			&lock_data.data,
 			shared.Entry {
@@ -212,5 +212,7 @@ install_package :: proc(ark_dir: string, options: []string) {
 			fmt.println("ERROR: failed to write ark.lock")
 			os.exit(1)
 		}
+		fmt.println("Running installer")
+		// run installer
 	}
 }

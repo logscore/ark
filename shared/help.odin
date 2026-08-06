@@ -130,8 +130,7 @@ Commands:
 
   build <path> [--with <cmd>] [--no-cache-tools]
     Detect the project toolchain and run its build script.
-    Supports Go, Rust, Zig, Make, TypeScript via Bun, C/C++ via Zig,
-    and Odin.
+    Supports Go, Rust, Zig, Make, TypeScript via Bun, C/C++ via Zig, and Odin.
     --with <cmd>          Override toolchain detection and run this command.
     --no-cache-tools      Store tools in .ark/tools and remove them after
                           the build. Intended for CI environments.
@@ -148,3 +147,18 @@ print_help :: proc(command: string) {
 	}
 	fmt.println(default_help)
 }
+
+/*
+   __        ark - git package manager
+  /  \       Usage: ark <command> [args] [options]
+ / /\ \
+/ /__\ \     Commands:
+               install <repo> [-v <ver>] [-f]   clone, build, install
+               uninstall <pkg> [-v <ver>]       remove package/data stays
+               update <pkg> [-v <ver>] [-f]     update to latest
+               list [pkg] [-v <ver>]            list installed versions
+               use <pkg> <ver>                  set active version in ~/.ark/bin
+               build [path] [--with cmd]        build via detected toolchain
+
+               Run `ark <cmd> --help` for details.
+*/

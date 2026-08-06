@@ -3,6 +3,7 @@ package commands
 import "core:flags"
 import "core:fmt"
 import "core:os"
+import "vendor:curl"
 
 import "../shared"
 
@@ -19,6 +20,7 @@ init_ark :: proc(ark_dir: string, options: []string) {
 	}
 
 	ark_lock, _ := os.join_path({ark_dir, "ark.lock"}, context.allocator)
+
 	defer delete(ark_lock)
 
 	// Create ark.lock
@@ -33,12 +35,30 @@ init_ark :: proc(ark_dir: string, options: []string) {
 		}
 	}
 
-	// TODO: If ark.json doesnt exist, make the file with empty json + $schema
 	// TODO: Make the json schema for IDEs. Add it to the local dir and point the $schema at it.
+	// If doesnt exist,
+	// pull remote file from my site with curl into a buffer
+	// Write that file into a file in ~/.ark
+	// Save OS path to a varaible to inject into the ark.json $schema
+	// TODO: If ark.json doesnt exist, check the schema.json exists ,make it if not,
+	ark_schema, _ := os.join_path({ark_dir, "schema.json"}, context.allocator)
+	if !shared.check_file_or_folder_exists(ark_lock) {
+		err := os.write_entire_file_from_string(
+			ark_lock,
+			`{
+	"$schema": "https://lsreeder.com/.ark/schema.json",
+    "packages": []
+}`,
+		)
+		if err != nil {
+			fmt.println("ERROR: Failed to initialize schema.json file:")
+			os.exit(1)
+		}
+	}
 
 	return
 }
 
-add_ark_to_path :: proc() {
-	// Print out OS specific command to add executable to user path
-}
+// add_ark_to_path :: proc() {
+// 	// Print out OS specific command to add executable to user path
+// }

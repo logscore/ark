@@ -92,11 +92,12 @@ use_package :: proc(ark_dir: string, options: []string) {
 		os.exit(1)
 	}
 
-	new_link_path, r := os.join_path({ark_dir, "bin", installed.binary}, context.allocator)
-
-	// swap the symlink
-	if err := os.symlink(new_binary_file_to_link, new_link_path); err != nil {
-		fmt.printfln("ERROR: failed to relink %s: %v", installed.binary, err)
+	if relink_err := shared.relink_binary_atomic(
+		ark_dir,
+		installed.binary,
+		new_binary_file_to_link,
+	); relink_err != nil {
+		fmt.eprintfln("ERROR: failed to relink %s: %v", installed.binary, relink_err)
 		os.exit(1)
 	}
 }
