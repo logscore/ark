@@ -7,43 +7,28 @@ import "core:os"
 import "core:strings"
 
 resolve_repo_to_sha :: proc(ark_dir: string, repo_data: shared.Repo) -> string {
-	repos_dir, path_err := os.join_path({ark_dir, "repos"}, context.allocator)
-	if path_err != nil {
-		fmt.eprintln("Failed to build .ark repository directory.")
-		os.exit(1)
-	}
+	full_repo_path := shared.repo_path_from_url(ark_dir, repo_data.url)
 
-	repo_name := strings.concatenate({repo_data.name, ".git"})
-
-	full_repo_dir, repo_path_err := os.join_path({repos_dir, repo_name}, context.allocator)
-	if repo_path_err != nil {
-		fmt.eprintln("Failed to build repository path.")
-		os.exit(1)
-	}
-
-	repo_exists := shared.check_file_or_folder_exists(full_repo_dir)
+	repo_exists := shared.check_file_or_folder_exists(full_repo_path)
 
 	// The repository cache is independent from whether the package is
 	// already installed. Clone only when the cache does not exist.
 	if !repo_exists {
-		ok := clone_bare_copy(repo_data.url, repo_name, repos_dir)
+		ok := clone_bare_copy(repo_data.url, repo_data.name, full_repo_path)
 		if !ok {
 			// fmt.printfln("ERROR: failed to clone to target directory: %s", full_repo_dir)
 			os.exit(1)
 		}
 
-		fmt.println("\nSuccessfully cloned to:", full_repo_dir)
+		fmt.println("\nSuccessfully cloned to:", full_repo_path)
 	}
 
-	delete(repos_dir, context.allocator)
-	delete(repo_name, context.allocator)
-
-	if !fetch_remotes_and_tags(full_repo_dir) {
+	if !fetch_remotes_and_tags(full_repo_path) {
 		fmt.eprintln("Failed to fetch remote branches and tags.")
 		os.exit(1)
 	}
 
-	ref_sha, spec_ok := resolve_spec_to_sha(full_repo_dir, repo_data.spec)
+	ref_sha, spec_ok := resolve_spec_to_sha(full_repo_path, repo_data.spec)
 	if !spec_ok {
 		fmt.eprintfln("Repository has no valid ref for version: %s", repo_data.spec)
 		os.exit(1)

@@ -4,8 +4,8 @@ package shared
 
 import "core:encoding/json"
 import "core:fmt"
-import "core:io"
 import "core:os"
+import "core:slice"
 import "core:strconv"
 import "core:strings"
 
@@ -216,4 +216,29 @@ relink_binary_atomic :: proc(
 	}
 
 	return nil
+}
+repo_path_from_url :: proc(
+	ark_dir: string,
+	url: string,
+	allocator := context.allocator,
+) -> string {
+	rest := url
+	if strings.starts_with(url, "git@") {
+		rest = strings.trim_prefix(url, "git@")
+		rest, _ = strings.replace(rest, ":", "/", 1)
+	} else {
+		rest = strings.trim_prefix(url, "https://")
+	}
+
+	segments := strings.split(rest, "/", context.temp_allocator)
+	if len(segments) < 2 {
+		return ""
+	}
+
+	parts := make([dynamic]string, 0, len(segments) + 2, context.temp_allocator)
+	append(&parts, ark_dir, "repos")
+	append(&parts, ..segments)
+
+	result, _ := os.join_path(parts[:], allocator)
+	return result
 }
