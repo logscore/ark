@@ -11,10 +11,14 @@ resolve_repo_to_sha :: proc(ark_dir: string, repo_data: shared.Repo) -> string {
 
 	repo_exists := shared.check_file_or_folder_exists(full_repo_path)
 
+	idx := strings.last_index(full_repo_path, "/")
+	working_dir := full_repo_path[:idx]
+	package_name := full_repo_path[idx + 1:]
 	// The repository cache is independent from whether the package is
 	// already installed. Clone only when the cache does not exist.
 	if !repo_exists {
-		ok := clone_bare_copy(repo_data.url, repo_data.name, full_repo_path)
+		_ = os.make_directory_all(working_dir)
+		ok := clone_bare_copy(repo_data.url, package_name, working_dir)
 		if !ok {
 			// fmt.printfln("ERROR: failed to clone to target directory: %s", full_repo_dir)
 			os.exit(1)
@@ -165,7 +169,15 @@ compare_fetched_sha_to_lock_sha :: proc(ref_sha: string, lock_data: shared.Lock_
 	return
 }
 
-checkout_to_sha :: proc(ark_dir: string, ref_sha: string, package_name: string) -> (string, bool) {
+checkout_to_sha :: proc(
+	ark_dir: string,
+	ref_sha: string,
+	package_name: string,
+	repo_url: string,
+) -> (
+	string,
+	bool,
+) {
 	tmp_dir, tmp_dir_error := os.join_path({ark_dir, "tmp"}, context.allocator)
 	defer delete(tmp_dir, context.allocator)
 
@@ -191,14 +203,7 @@ checkout_to_sha :: proc(ark_dir: string, ref_sha: string, package_name: string) 
 		fmt.eprintln("Failed to build .ark repository directory.")
 		os.exit(1)
 	}
-
-	repo_name := strings.concatenate({package_name, ".git"})
-
-	full_repo_dir, repo_path_err := os.join_path({repos_dir, repo_name}, context.allocator)
-	if repo_path_err != nil {
-		fmt.eprintln("Failed to build repository path.")
-		os.exit(1)
-	}
+	full_repo_path := shared.repo_path_from_url(ark_dir, repo_url)
 
 	// git worktree add \
 	//   --detach \
@@ -208,7 +213,7 @@ checkout_to_sha :: proc(ark_dir: string, ref_sha: string, package_name: string) 
 
 	p, start_err := os.process_start(
 		os.Process_Desc {
-			working_dir = full_repo_dir,
+			working_dir = full_repo_path,
 			command = args,
 			stdin = os.stdin,
 			stdout = os.stdout,

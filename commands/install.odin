@@ -50,9 +50,12 @@ install_package :: proc(ark_dir: string, options: []string) {
 		repo_data.spec = opts.version
 	}
 
+	// Sanitize url
+	normalized_url := strings.trim(strings.trim_space(opts.repo_url), "/")
+
 	// parse url.
 	// TODO: eventually support bare github.com/user/tool or user/tool
-	scheme, host, full_path, _, _ := net.split_url(opts.repo_url)
+	scheme, host, full_path, _, _ := net.split_url(normalized_url)
 
 	base_path := strings.split(full_path, "@")[0]
 	if scheme == "" && strings.starts_with(host, "git@") {
@@ -99,7 +102,12 @@ install_package :: proc(ark_dir: string, options: []string) {
 			// Is --force true?
 			if opts.force {
 				// pull build and install
-				tmp_build_dir, checkout_ok := git.checkout_to_sha(ark_dir, ref_sha, repo_data.name)
+				tmp_build_dir, checkout_ok := git.checkout_to_sha(
+					ark_dir,
+					ref_sha,
+					repo_data.name,
+					repo_data.url,
+				)
 				if !checkout_ok {
 					fmt.eprintln(
 						"Failed to checkout ref %s to temporary build directory.",
@@ -166,7 +174,12 @@ install_package :: proc(ark_dir: string, options: []string) {
 				installed[0].version,
 			)
 
-			tmp_build_dir, checkout_ok := git.checkout_to_sha(ark_dir, ref_sha, repo_data.name)
+			tmp_build_dir, checkout_ok := git.checkout_to_sha(
+				ark_dir,
+				ref_sha,
+				repo_data.name,
+				repo_data.url,
+			)
 			if !checkout_ok {
 				fmt.eprintln(
 					"Failed to checkout ref %s to temporary build directory.",
@@ -202,7 +215,12 @@ install_package :: proc(ark_dir: string, options: []string) {
 		}
 	} else { 	// Sha is not in lock. New version
 		// checkout to spec, build, append lock file, install
-		tmp_build_dir, checkout_ok := git.checkout_to_sha(ark_dir, ref_sha, repo_data.name)
+		tmp_build_dir, checkout_ok := git.checkout_to_sha(
+			ark_dir,
+			ref_sha,
+			repo_data.name,
+			repo_data.url,
+		)
 		if !checkout_ok {
 			fmt.eprintln("Failed to checkout SHA to temporary build directory.")
 			os.exit(1)

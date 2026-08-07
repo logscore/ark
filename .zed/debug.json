@@ -7,9 +7,9 @@
         "cwd": "${ZED_WORKTREE_ROOT}",
         "args": [
             "install",
-            "https://github.com/logscore/pervie.git",
+            "git@github.com:ghostty-org/ghostty.git",
             "--version",
-            "v1.0.1"
+            "v1.3.1"
         ],
         "build": {
             "command": "odin",

@@ -78,7 +78,12 @@ update_package :: proc(ark_dir: string, options: []string) {
 
 	if !found {
 		// New version, not yet in lock
-		tmp_build_dir, checkout_ok := git.checkout_to_sha(ark_dir, ref_sha, opts.package_name)
+		tmp_build_dir, checkout_ok := git.checkout_to_sha(
+			ark_dir,
+			ref_sha,
+			opts.package_name,
+			matched.repo,
+		)
 		if !checkout_ok {
 			fmt.eprintln("Failed to checkout SHA to temporary build directory.")
 			os.exit(1)
@@ -98,7 +103,12 @@ update_package :: proc(ark_dir: string, options: []string) {
 			matched.version,
 		)
 
-		tmp_build_dir, checkout_ok := git.checkout_to_sha(ark_dir, ref_sha, opts.package_name)
+		tmp_build_dir, checkout_ok := git.checkout_to_sha(
+			ark_dir,
+			ref_sha,
+			opts.package_name,
+			matched.repo,
+		)
 		if !checkout_ok {
 			fmt.eprintfln("Failed to checkout ref %s to temporary build directory.", ref_sha[:7])
 			os.exit(1)
@@ -137,7 +147,12 @@ update_package :: proc(ark_dir: string, options: []string) {
 		return
 	}
 
-	tmp_build_dir, checkout_ok := git.checkout_to_sha(ark_dir, ref_sha, opts.package_name)
+	tmp_build_dir, checkout_ok := git.checkout_to_sha(
+		ark_dir,
+		ref_sha,
+		opts.package_name,
+		matched.repo,
+	)
 	if !checkout_ok {
 		fmt.eprintfln("Failed to checkout ref %s to temporary build directory.", ref_sha[:7])
 		os.exit(1)
