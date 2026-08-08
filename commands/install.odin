@@ -67,25 +67,31 @@ install_package :: proc(ark_dir: string, options: []string) {
 		os.exit(1)
 	}
 
-	base := strings.trim_suffix(base_path, ".git")
-	path_tokens := strings.split(base, "/")
-	repo_data.name = path_tokens[len(path_tokens) - 1]
+	parent_path: string
+	parent_path, repo_data.name = shared.repo_path_from_url(
+		ark_dir,
+		normalized_url,
+		context.allocator,
+	)
+
+	defer delete(parent_path)
+
+	// Process out to git, clone to .ark/cache, fetch refs, find desired ref, return ref sha
+	ref_sha := git.resolve_repo_to_sha(parent_path, repo_data.name, repo_data)
+
+	if repo_data.spec == "HEAD" {
+		repo_data.spec = ref_sha[:7]
+	}
 
 	lock_data, lock_ok := shared.read_lock(ark_dir)
 	if !lock_ok {
 		os.exit(1)
 	}
 
-	// Process out to git, clone to .ark/cache, fetch refs, find desired ref, return ref sha
-	ref_sha := git.resolve_repo_to_sha(ark_dir, repo_data)
-
-	if repo_data.spec == "HEAD" {
-		repo_data.spec = ref_sha[:7]
-	}
-
 	installed_index: int
 	installed := make([dynamic]shared.Entry)
 	for line, index in lock_data.data {
+		// TODO: Add a --name/--alias flag to alias packages of the same name but from different repos.
 		if line.name == repo_data.name && line.sha == ref_sha {
 			installed_index = index
 			append(&installed, line)
@@ -105,8 +111,8 @@ install_package :: proc(ark_dir: string, options: []string) {
 				tmp_build_dir, checkout_ok := git.checkout_to_sha(
 					ark_dir,
 					ref_sha,
+					parent_path,
 					repo_data.name,
-					repo_data.url,
 				)
 				if !checkout_ok {
 					fmt.eprintln(
@@ -129,7 +135,7 @@ install_package :: proc(ark_dir: string, options: []string) {
 					lock_data.data[installed_index].sha,
 					lock_data.data[installed_index].repo,
 					// TODO: add in the binary title from the builder
-					lock_data.data[installed_index].binary,
+					"placeholder",
 					time.to_unix_seconds(time.now()),
 				}
 
@@ -145,7 +151,7 @@ install_package :: proc(ark_dir: string, options: []string) {
 				if shared.is_active_version(ark_dir, entry.name, entry.version, entry.binary) {
 					fmt.printfln(
 						"Package '%[0]s' of version '%[1]s' is already installed and active.\n\nPass --force to rebuild it.",
-						entry.name,
+						repo_data.name,
 						entry.version,
 					)
 					os.exit(1)
@@ -161,7 +167,7 @@ install_package :: proc(ark_dir: string, options: []string) {
 
 				fmt.printfln(
 					"Package '%[0]s' of version '%[1]s' is installed. It is now active.",
-					entry.name,
+					repo_data.name,
 					entry.version,
 				)
 			}
@@ -177,8 +183,8 @@ install_package :: proc(ark_dir: string, options: []string) {
 			tmp_build_dir, checkout_ok := git.checkout_to_sha(
 				ark_dir,
 				ref_sha,
+				parent_path,
 				repo_data.name,
-				repo_data.url,
 			)
 			if !checkout_ok {
 				fmt.eprintln(
@@ -201,7 +207,7 @@ install_package :: proc(ark_dir: string, options: []string) {
 				installed_entry.sha,
 				installed_entry.repo,
 				// TODO: add in the binary title from the builder
-				installed_entry.binary,
+				"placeholder",
 				time.to_unix_seconds(time.now()),
 			}
 
@@ -218,8 +224,8 @@ install_package :: proc(ark_dir: string, options: []string) {
 		tmp_build_dir, checkout_ok := git.checkout_to_sha(
 			ark_dir,
 			ref_sha,
+			parent_path,
 			repo_data.name,
-			repo_data.url,
 		)
 		if !checkout_ok {
 			fmt.eprintln("Failed to checkout SHA to temporary build directory.")
@@ -238,7 +244,7 @@ install_package :: proc(ark_dir: string, options: []string) {
 				ref_sha,
 				repo_data.url,
 				// TODO: add in the binary title from the builder
-				repo_data.name,
+				"placeholder",
 				time.to_unix_seconds(time.now()),
 			},
 		)

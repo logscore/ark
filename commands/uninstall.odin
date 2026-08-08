@@ -72,10 +72,14 @@ uninstall_package :: proc(ark_dir: string, options: []string) {
 	symlink_path, _ := os.join_path({ark_dir, "bin", installed[0].binary}, context.allocator)
 	defer delete(symlink_path)
 
-	package_git_repo_dir, _ := os.join_path(
-		{ark_dir, "repos", strings.concatenate({opts.package_name, ".git"})},
+	parent_path, url_derived_name := shared.repo_path_from_url(
+		ark_dir,
+		installed[0].repo,
 		context.allocator,
 	)
+	defer delete(parent_path)
+
+	package_git_repo_dir, _ := os.join_path({parent_path, url_derived_name}, context.allocator)
 	defer delete(package_git_repo_dir)
 
 	// No version specified: uninstall everything
@@ -84,7 +88,7 @@ uninstall_package :: proc(ark_dir: string, options: []string) {
 			_ = os.remove(symlink_path)
 		}
 		package_build_dir, _ := os.join_path(
-			{ark_dir, "build", opts.package_name},
+			{ark_dir, "build", url_derived_name},
 			context.allocator,
 		)
 		os.remove_all(package_build_dir)
@@ -96,7 +100,7 @@ uninstall_package :: proc(ark_dir: string, options: []string) {
 		remaining := make([dynamic]shared.Entry)
 		defer delete(remaining)
 		for entry in lock_data.data {
-			if entry.name != opts.package_name {
+			if entry.name != url_derived_name {
 				append(&remaining, entry)
 			}
 		}
@@ -118,14 +122,14 @@ uninstall_package :: proc(ark_dir: string, options: []string) {
 		}
 	}
 	if found_index == -1 {
-		fmt.printfln("%s version %s is not installed", opts.package_name, opts.version)
+		fmt.printfln("%s version %s is not installed", url_derived_name, opts.version)
 		os.exit(1)
 	}
 
 	ordered_remove(&installed, found_index)
 
 	versioned_build_dir, _ := os.join_path(
-		{ark_dir, "build", opts.package_name, opts.version},
+		{ark_dir, "build", url_derived_name, opts.version},
 		context.allocator,
 	)
 	defer delete(versioned_build_dir)
@@ -134,7 +138,7 @@ uninstall_package :: proc(ark_dir: string, options: []string) {
 	remaining := make([dynamic]shared.Entry)
 	defer delete(remaining)
 	for entry in lock_data.data {
-		if entry.name == opts.package_name && entry.version == found_entry.version {
+		if entry.name == url_derived_name && entry.version == found_entry.version {
 			continue
 		}
 		append(&remaining, entry)
@@ -145,7 +149,7 @@ uninstall_package :: proc(ark_dir: string, options: []string) {
 		fmt.printfln(
 			"%[0]s is the last version available for %[1]s. After uninstall %[1]s wont be available.",
 			opts.version,
-			opts.package_name,
+			url_derived_name,
 		)
 		if resolved_active_linked_file != "" {
 			_ = os.remove(symlink_path)
@@ -178,7 +182,7 @@ uninstall_package :: proc(ark_dir: string, options: []string) {
 
 			new_binary_to_link := shared.artifact_path(
 				ark_dir,
-				opts.package_name,
+				url_derived_name,
 				replacement.version,
 				replacement.binary,
 			)

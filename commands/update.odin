@@ -6,6 +6,7 @@ import shared "../shared"
 import "core:flags"
 import "core:fmt"
 import "core:os"
+import "core:time"
 
 Update_Options :: struct {
 	package_name: string `args:"name=package,pos=0,required"`,
@@ -59,11 +60,15 @@ update_package :: proc(ark_dir: string, options: []string) {
 		want_version = "HEAD" // or resolve HEAD from remote
 	}
 
-	// NOTE: two repos publishing the same tool name isn't handled yet; install blocks that case for now
+	parent_path, url_derived_name := shared.repo_path_from_url(ark_dir, installed[0].repo)
+
+	// Process out to git, clone to .ark/cache, fetch refs, find desired ref, return ref sha
 	ref_sha := git.resolve_repo_to_sha(
-		ark_dir,
-		shared.Repo{installed[0].repo, opts.package_name, want_version},
+		parent_path,
+		url_derived_name,
+		shared.Repo{installed[0].repo, url_derived_name, want_version},
 	)
+
 
 	// Is this sha already in the lock?
 	matched: shared.Entry
@@ -81,8 +86,8 @@ update_package :: proc(ark_dir: string, options: []string) {
 		tmp_build_dir, checkout_ok := git.checkout_to_sha(
 			ark_dir,
 			ref_sha,
-			opts.package_name,
-			matched.repo,
+			parent_path,
+			url_derived_name,
 		)
 		if !checkout_ok {
 			fmt.eprintln("Failed to checkout SHA to temporary build directory.")
@@ -90,8 +95,26 @@ update_package :: proc(ark_dir: string, options: []string) {
 		}
 
 		fmt.println("Running builder")
-		fmt.println("Running installer")
 		fmt.println("Updating lock")
+		append(
+			&lock_data.data,
+			shared.Entry {
+				url_derived_name,
+				want_version,
+				ref_sha,
+				installed[0].repo,
+				// TODO: add in the binary title from the builder
+				"placeholder",
+				time.to_unix_seconds(time.now()),
+			},
+		)
+
+		if !shared.write_lock(ark_dir, lock_data.data[:]) {
+			fmt.println("ERROR: failed to write ark.lock")
+			os.exit(1)
+		}
+
+		fmt.println("Running installer")
 		return
 	}
 
@@ -99,15 +122,15 @@ update_package :: proc(ark_dir: string, options: []string) {
 	if !shared.artifact_exists(ark_dir, matched.name, matched.version, matched.binary) {
 		fmt.printfln(
 			"Package '%[0]s' of version '%[1]s' is in lock file, but no binary can be found. Installing from lock file...",
-			opts.package_name,
+			url_derived_name,
 			matched.version,
 		)
 
 		tmp_build_dir, checkout_ok := git.checkout_to_sha(
 			ark_dir,
 			ref_sha,
-			opts.package_name,
-			matched.repo,
+			parent_path,
+			url_derived_name,
 		)
 		if !checkout_ok {
 			fmt.eprintfln("Failed to checkout ref %s to temporary build directory.", ref_sha[:7])
@@ -115,8 +138,26 @@ update_package :: proc(ark_dir: string, options: []string) {
 		}
 
 		fmt.println("Running builder")
-		fmt.println("Running installer")
 		fmt.println("Updating lock")
+		append(
+			&lock_data.data,
+			shared.Entry {
+				url_derived_name,
+				want_version,
+				ref_sha,
+				installed[0].repo,
+				// TODO: add in the binary title from the builder
+				"placeholder",
+				time.to_unix_seconds(time.now()),
+			},
+		)
+
+		if !shared.write_lock(ark_dir, lock_data.data[:]) {
+			fmt.println("ERROR: failed to write ark.lock")
+			os.exit(1)
+		}
+
+		fmt.println("Running installer")
 		return
 	}
 
@@ -125,7 +166,7 @@ update_package :: proc(ark_dir: string, options: []string) {
 		if shared.is_active_version(ark_dir, matched.name, matched.version, matched.binary) {
 			fmt.printfln(
 				"Package '%[0]s' of version '%[1]s' is already installed and active.\n\nPass --force to rebuild it.",
-				opts.package_name,
+				url_derived_name,
 				matched.version,
 			)
 			os.exit(1)
@@ -141,7 +182,7 @@ update_package :: proc(ark_dir: string, options: []string) {
 
 		fmt.printfln(
 			"Package '%[0]s' of version '%[1]s' is installed. It is now active.",
-			opts.package_name,
+			url_derived_name,
 			matched.version,
 		)
 		return
@@ -150,8 +191,8 @@ update_package :: proc(ark_dir: string, options: []string) {
 	tmp_build_dir, checkout_ok := git.checkout_to_sha(
 		ark_dir,
 		ref_sha,
-		opts.package_name,
-		matched.repo,
+		parent_path,
+		url_derived_name,
 	)
 	if !checkout_ok {
 		fmt.eprintfln("Failed to checkout ref %s to temporary build directory.", ref_sha[:7])
@@ -159,6 +200,23 @@ update_package :: proc(ark_dir: string, options: []string) {
 	}
 
 	fmt.println("Running builder")
-	fmt.println("Running installer")
 	fmt.println("Updating lock")
+	append(
+		&lock_data.data,
+		shared.Entry {
+			url_derived_name,
+			want_version,
+			ref_sha,
+			installed[0].repo,
+			// TODO: add in the binary title from the builder
+			"placeholder",
+			time.to_unix_seconds(time.now()),
+		},
+	)
+
+	if !shared.write_lock(ark_dir, lock_data.data[:]) {
+		fmt.println("ERROR: failed to write ark.lock")
+		os.exit(1)
+	}
+	fmt.println("Running installer")
 }

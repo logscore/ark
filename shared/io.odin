@@ -217,28 +217,37 @@ relink_binary_atomic :: proc(
 
 	return nil
 }
+
 repo_path_from_url :: proc(
 	ark_dir: string,
 	url: string,
 	allocator := context.allocator,
-) -> string {
+) -> (
+	parent: string,
+	name: string,
+) {
 	rest := url
 	if strings.starts_with(url, "git@") {
 		rest = strings.trim_prefix(url, "git@")
+		rest = strings.trim_suffix(rest, ".git")
 		rest, _ = strings.replace(rest, ":", "/", 1)
 	} else {
 		rest = strings.trim_prefix(url, "https://")
+		rest = strings.trim_suffix(rest, ".git")
 	}
 
 	segments := strings.split(rest, "/", context.temp_allocator)
-	if len(segments) < 2 {
-		return ""
-	}
 
 	parts := make([dynamic]string, 0, len(segments) + 2, context.temp_allocator)
+	defer delete(parts)
 	append(&parts, ark_dir, "repos")
 	append(&parts, ..segments)
 
-	result, _ := os.join_path(parts[:], allocator)
-	return result
+	last_part_index := len(parts) - 1
+	url_name := parts[last_part_index]
+	unordered_remove(&parts, last_part_index)
+
+	parent_path, _ := os.join_path(parts[:], allocator)
+
+	return parent_path, url_name
 }

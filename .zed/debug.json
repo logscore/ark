@@ -5,6 +5,7 @@
         "request": "launch",
         "program": "${ZED_WORKTREE_ROOT}/bin/ark",
         "cwd": "${ZED_WORKTREE_ROOT}",
+        "terminal": "console",
         "args": [
             "install",
             "git@github.com:ghostty-org/ghostty.git",
@@ -22,6 +23,7 @@
         "request": "launch",
         "program": "${ZED_WORKTREE_ROOT}/bin/ark",
         "cwd": "${ZED_WORKTREE_ROOT}",
+        "terminal": "console",
         "args": ["update", "pervie"],
         "build": {
             "command": "odin",
@@ -34,6 +36,7 @@
         "request": "launch",
         "program": "${ZED_WORKTREE_ROOT}/bin/ark",
         "cwd": "${ZED_WORKTREE_ROOT}",
+        "terminal": "console",
         "args": ["uninstall", "pervie", "--version", "v1.0.0"],
         "build": {
             "command": "odin",
@@ -46,6 +49,7 @@
         "request": "launch",
         "program": "${ZED_WORKTREE_ROOT}/bin/ark",
         "cwd": "${ZED_WORKTREE_ROOT}",
+        "terminal": "console",
         "args": ["use", "pervie", "v1.0.0"],
         "build": {
             "command": "odin",

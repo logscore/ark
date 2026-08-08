@@ -6,33 +6,35 @@ import "core:fmt"
 import "core:os"
 import "core:strings"
 
-resolve_repo_to_sha :: proc(ark_dir: string, repo_data: shared.Repo) -> string {
-	full_repo_path := shared.repo_path_from_url(ark_dir, repo_data.url)
+resolve_repo_to_sha :: proc(
+	parent_dir: string,
+	package_name: string,
+	repo_data: shared.Repo,
+) -> string {
+	cache_dir, _ := os.join_path({parent_dir, package_name}, context.allocator)
+	defer delete(cache_dir)
 
-	repo_exists := shared.check_file_or_folder_exists(full_repo_path)
+	repo_exists := shared.check_file_or_folder_exists(cache_dir)
 
-	idx := strings.last_index(full_repo_path, "/")
-	working_dir := full_repo_path[:idx]
-	package_name := full_repo_path[idx + 1:]
 	// The repository cache is independent from whether the package is
 	// already installed. Clone only when the cache does not exist.
 	if !repo_exists {
-		_ = os.make_directory_all(working_dir)
-		ok := clone_bare_copy(repo_data.url, package_name, working_dir)
+		_ = os.make_directory_all(parent_dir)
+		ok := clone_bare_copy(repo_data.url, package_name, parent_dir)
 		if !ok {
 			// fmt.printfln("ERROR: failed to clone to target directory: %s", full_repo_dir)
 			os.exit(1)
 		}
 
-		fmt.println("\nSuccessfully cloned to:", full_repo_path)
+		fmt.println("\nSuccessfully cloned to:", cache_dir)
 	}
 
-	if !fetch_remotes_and_tags(full_repo_path) {
+	if !fetch_remotes_and_tags(cache_dir) {
 		fmt.eprintln("Failed to fetch remote branches and tags.")
 		os.exit(1)
 	}
 
-	ref_sha, spec_ok := resolve_spec_to_sha(full_repo_path, repo_data.spec)
+	ref_sha, spec_ok := resolve_spec_to_sha(cache_dir, repo_data.spec)
 	if !spec_ok {
 		fmt.eprintfln("Repository has no valid ref for version: %s", repo_data.spec)
 		os.exit(1)
@@ -172,8 +174,8 @@ compare_fetched_sha_to_lock_sha :: proc(ref_sha: string, lock_data: shared.Lock_
 checkout_to_sha :: proc(
 	ark_dir: string,
 	ref_sha: string,
+	cache_parent_dir: string,
 	package_name: string,
-	repo_url: string,
 ) -> (
 	string,
 	bool,
@@ -197,13 +199,8 @@ checkout_to_sha :: proc(
 	}
 	defer delete(full_tmp_build_dir)
 
-	repos_dir, path_err := os.join_path({ark_dir, "repos"}, context.allocator)
-	defer delete(repos_dir)
-	if path_err != nil {
-		fmt.eprintln("Failed to build .ark repository directory.")
-		os.exit(1)
-	}
-	full_repo_path := shared.repo_path_from_url(ark_dir, repo_url)
+	full_repo_path, _ := os.join_path({cache_parent_dir, package_name}, context.allocator)
+	defer delete(full_repo_path, context.allocator)
 
 	// git worktree add \
 	//   --detach \
