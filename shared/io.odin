@@ -225,29 +225,42 @@ repo_path_from_url :: proc(
 ) -> (
 	parent: string,
 	name: string,
+	ok: bool,
 ) {
 	rest := url
 	if strings.starts_with(url, "git@") {
 		rest = strings.trim_prefix(url, "git@")
-		rest = strings.trim_suffix(rest, ".git")
-		rest, _ = strings.replace(rest, ":", "/", 1)
+		rest, _ = strings.replace(rest, ":", "/", 1, context.temp_allocator)
 	} else {
 		rest = strings.trim_prefix(url, "https://")
-		rest = strings.trim_suffix(rest, ".git")
+		rest = strings.trim_prefix(rest, "http://")
+	}
+	rest = strings.trim_suffix(rest, ".git")
+
+	if rest == "" {
+		return "", "", false
 	}
 
 	segments := strings.split(rest, "/", context.temp_allocator)
+
+	// Validate that there are no path traversals. Im sure this can be more robust
+	for seg in segments {
+		if seg == "" || seg == "." || seg == ".." {
+			return "", "", false
+		}
+	}
 
 	parts := make([dynamic]string, 0, len(segments) + 2, context.temp_allocator)
 	defer delete(parts)
 	append(&parts, ark_dir, "repos")
 	append(&parts, ..segments)
 
-	last_part_index := len(parts) - 1
-	url_name := parts[last_part_index]
-	unordered_remove(&parts, last_part_index)
+	// Extract name value and remove from array
+	// Note we may not need to do this. We might be able to just index into the array and return that
+	name = strings.clone(segments[len(segments) - 1], allocator)
+	pop(&parts)
 
-	parent_path, _ := os.join_path(parts[:], allocator)
+	parent, _ = os.join_path(parts[:], allocator)
 
-	return parent_path, url_name
+	return parent, name, true
 }

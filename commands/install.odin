@@ -68,11 +68,15 @@ install_package :: proc(ark_dir: string, options: []string) {
 	}
 
 	parent_path: string
-	parent_path, repo_data.name = shared.repo_path_from_url(
+	ok: bool
+	if parent_path, repo_data.name, ok = shared.repo_path_from_url(
 		ark_dir,
 		normalized_url,
 		context.allocator,
-	)
+	); !ok {
+		fmt.printfln("Invalid repo url: %s\n", opts.repo_url)
+		os.exit(1)
+	}
 
 	defer delete(parent_path)
 
@@ -91,7 +95,7 @@ install_package :: proc(ark_dir: string, options: []string) {
 	installed_index: int
 	installed := make([dynamic]shared.Entry)
 	for line, index in lock_data.data {
-		// TODO: Add a --name/--alias flag to alias packages of the same name but from different repos.
+		// TODO: Add a --name/--alias flag to alias packages of the same name but from different repos. It would change the binary name, not that package name. Updating will be tricky
 		if line.name == repo_data.name && line.sha == ref_sha {
 			installed_index = index
 			append(&installed, line)

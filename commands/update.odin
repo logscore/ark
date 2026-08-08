@@ -60,7 +60,16 @@ update_package :: proc(ark_dir: string, options: []string) {
 		want_version = "HEAD" // or resolve HEAD from remote
 	}
 
-	parent_path, url_derived_name := shared.repo_path_from_url(ark_dir, installed[0].repo)
+	parent_path: string
+	url_derived_name: string
+	if parent_path, url_derived_name, ok := shared.repo_path_from_url(
+		ark_dir,
+		installed[0].repo,
+		context.allocator,
+	); !ok {
+		fmt.printfln("Invalid repo url: %s\n", installed[0].repo)
+		os.exit(1)
+	}
 
 	// Process out to git, clone to .ark/cache, fetch refs, find desired ref, return ref sha
 	ref_sha := git.resolve_repo_to_sha(

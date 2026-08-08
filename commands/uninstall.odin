@@ -72,11 +72,17 @@ uninstall_package :: proc(ark_dir: string, options: []string) {
 	symlink_path, _ := os.join_path({ark_dir, "bin", installed[0].binary}, context.allocator)
 	defer delete(symlink_path)
 
-	parent_path, url_derived_name := shared.repo_path_from_url(
+	parent_path: string
+	url_derived_name: string
+	if parent_path, url_derived_name, ok := shared.repo_path_from_url(
 		ark_dir,
 		installed[0].repo,
 		context.allocator,
-	)
+	); !ok {
+		fmt.printfln("Invalid repo url: %s\n", installed[0].repo)
+		os.exit(1)
+	}
+
 	defer delete(parent_path)
 
 	package_git_repo_dir, _ := os.join_path({parent_path, url_derived_name}, context.allocator)
