@@ -57,12 +57,13 @@ update_package :: proc(ark_dir: string, options: []string) {
 
 	want_version := opts.version
 	if want_version == "" {
-		want_version = "HEAD" // or resolve HEAD from remote
+		want_version = "HEAD"
 	}
 
 	parent_path: string
 	url_derived_name: string
-	if parent_path, url_derived_name, ok := shared.repo_path_from_url(
+	ok: bool
+	if parent_path, url_derived_name, ok = shared.repo_path_from_url(
 		ark_dir,
 		installed[0].repo,
 		context.allocator,
