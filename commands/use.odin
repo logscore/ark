@@ -35,16 +35,9 @@ use_package :: proc(ark_dir: string, options: []string) {
 	if !lock_ok {
 		os.exit(1)
 	}
+	defer delete(lock_data.data)
 
-	installed: shared.Entry
-	found: bool
-	for line in lock_data.data {
-		if line.name == opts.package_name && line.version == opts.version {
-			installed = line
-			found = true
-			break
-		}
-	}
+	installed, _, found := shared.find_entry(lock_data.data[:], opts.package_name, opts.version)
 
 	if !found {
 		fmt.printfln(
@@ -56,17 +49,17 @@ use_package :: proc(ark_dir: string, options: []string) {
 	}
 
 	// Is the requested version already the active one?
-	if shared.is_active_version(ark_dir, opts.package_name, opts.version, installed.binary) {
+	if shared.is_active_version(ark_dir, opts.package_name, installed.sha, installed.binary) {
 		fmt.printfln("%[0]s of version %[1]s is already active.", opts.package_name, opts.version)
 		return
 	}
 
-	if !shared.artifact_exists(ark_dir, opts.package_name, opts.version, installed.binary) {
+	if !shared.artifact_exists(ark_dir, opts.package_name, installed.sha, installed.binary) {
 		fmt.printfln(
 			"%[0]s of version %[1]s does not exist. To install, run:\n\n    ark install %[2]s --version %[1]s\n\n",
 			opts.package_name,
 			opts.version,
-			installed.repo,
+			installed.url,
 		)
 		os.exit(1)
 	}
@@ -74,7 +67,7 @@ use_package :: proc(ark_dir: string, options: []string) {
 	new_binary_file_to_link := shared.artifact_path(
 		ark_dir,
 		opts.package_name,
-		opts.version,
+		installed.sha,
 		installed.binary,
 	)
 	defer delete(new_binary_file_to_link)

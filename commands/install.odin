@@ -37,17 +37,10 @@ install_package :: proc(ark_dir: string, options: []string) {
 	}
 
 	repo_data := shared.Repo {
-		url  = "",
-		name = "",
-		spec = "",
-	}
-
-	// If the version is not given, we want to update to the most up to date version, starting with tag, then branch/sha
-	// TODO: we cannot store HEAD as the version as that breaks the lock rule that we cannot have two packages of the same version in the lock. We can store the most recent sha, or most recent tag
-	if opts.version == "" {
-		repo_data.spec = "HEAD"
-	} else {
-		repo_data.spec = opts.version
+		url         = "",
+		name        = "",
+		spec        = opts.version,
+		default_ref = opts.version == "",
 	}
 
 	// Sanitize url
@@ -80,10 +73,10 @@ install_package :: proc(ark_dir: string, options: []string) {
 
 	defer delete(parent_path)
 
-	// Process out to git, clone to .ark/cache, fetch refs, find desired ref, return ref sha
-	ref_sha := git.resolve_repo_to_sha(parent_path, repo_data.name, repo_data)
+	// Fetch refs and resolve the requested tag, branch, or commit.
+	ref_sha, ref_kind, ref_name := git.resolve_repo_to_sha(parent_path, repo_data.name, repo_data)
 
-	if repo_data.spec == "HEAD" {
+	if repo_data.default_ref {
 		repo_data.spec = ref_sha[:7]
 	}
 
@@ -92,23 +85,22 @@ install_package :: proc(ark_dir: string, options: []string) {
 		os.exit(1)
 	}
 
-	installed_index: int
-	installed := make([dynamic]shared.Entry)
+	installed_index := -1
 	for line, index in lock_data.data {
-		// TODO: Add a --name/--alias flag to alias packages of the same name but from different repos. It would change the binary name, not that package name. Updating will be tricky
-		if line.name == repo_data.name && line.sha == ref_sha {
+		// TODO: Add a --name/--alias flag to alias packages with the same name.
+		if line.name == repo_data.name &&
+		   line.sha == ref_sha &&
+		   (installed_index == -1 || line.timestamp >= lock_data.data[installed_index].timestamp) {
 			installed_index = index
-			append(&installed, line)
 		}
 	}
-	defer delete(installed)
 
-	// Is sha in lock?
-	if len(installed) == 1 {
-		entry := installed[0]
+	// The SHA is the installed artifact identity.
+	if installed_index >= 0 {
+		entry := lock_data.data[installed_index]
 
 		// Is the artifact of this exact version on disk?
-		if shared.artifact_exists(ark_dir, entry.name, entry.version, entry.binary) {
+		if shared.artifact_exists(ark_dir, entry.name, entry.sha, entry.binary) {
 			// Is --force true?
 			if opts.force {
 				// pull build and install
@@ -125,23 +117,13 @@ install_package :: proc(ark_dir: string, options: []string) {
 					)
 					os.exit(1)
 				}
+				defer git.remove_worktree(parent_path, repo_data.name, tmp_build_dir)
 
 				// run builder
 				fmt.println("Running builder")
 				// run lock updater
 				fmt.println("Updating lock")
-				// Force build means we replace the lock entry.
-				// ? Is there a more efficient way to do this instead of shadowing the data index Entry??
-				// TODO: double check that these values are accurate as the builder may pull in new install instruction from the user config, and things like the binary name might be different
-				lock_data.data[installed_index] = shared.Entry {
-					lock_data.data[installed_index].name,
-					lock_data.data[installed_index].version,
-					lock_data.data[installed_index].sha,
-					lock_data.data[installed_index].repo,
-					// TODO: add in the binary title from the builder
-					"placeholder",
-					time.to_unix_seconds(time.now()),
-				}
+				lock_data.data[installed_index].timestamp = time.to_unix_seconds(time.now())
 
 				if !shared.write_lock(ark_dir, lock_data.data[:]) {
 					fmt.println("ERROR: failed to write ark.lock")
@@ -152,7 +134,7 @@ install_package :: proc(ark_dir: string, options: []string) {
 				fmt.println("Running installer")
 			} else {
 				// The version is on disk. Activate it, or report that it is active.
-				if shared.is_active_version(ark_dir, entry.name, entry.version, entry.binary) {
+				if shared.is_active_version(ark_dir, entry.name, entry.sha, entry.binary) {
 					fmt.printfln(
 						"Package '%[0]s' of version '%[1]s' is already installed and active.\n\nPass --force to rebuild it.",
 						repo_data.name,
@@ -161,7 +143,7 @@ install_package :: proc(ark_dir: string, options: []string) {
 					os.exit(1)
 				}
 
-				target := shared.artifact_path(ark_dir, entry.name, entry.version, entry.binary)
+				target := shared.artifact_path(ark_dir, entry.name, entry.sha, entry.binary)
 				defer delete(target)
 
 				if relink_err := shared.relink_binary_atomic(ark_dir, entry.binary, target);
@@ -181,7 +163,7 @@ install_package :: proc(ark_dir: string, options: []string) {
 			fmt.printfln(
 				"Package '%[0]s' of version '%[1]s' is in lock file, but no binary can be found. Installing package from lock file...\n",
 				repo_data.name,
-				installed[0].version,
+				entry.version,
 			)
 
 			tmp_build_dir, checkout_ok := git.checkout_to_sha(
@@ -197,23 +179,13 @@ install_package :: proc(ark_dir: string, options: []string) {
 				)
 				os.exit(1)
 			}
+			defer git.remove_worktree(parent_path, repo_data.name, tmp_build_dir)
 
 			// run builder
 			fmt.println("Running builder")
 			// run lock updater
 			fmt.println("Updating lock")
-			// Like with --force, we overwrite the value with the new installed timestamp
-			// TODO: double check that these values are accurate as the builder may pull in new install instruction from the user config, and things like the binary name might be different
-			installed_entry: shared.Entry = lock_data.data[installed_index]
-			installed_entry = shared.Entry {
-				installed_entry.name,
-				installed_entry.version,
-				installed_entry.sha,
-				installed_entry.repo,
-				// TODO: add in the binary title from the builder
-				"placeholder",
-				time.to_unix_seconds(time.now()),
-			}
+			lock_data.data[installed_index].timestamp = time.to_unix_seconds(time.now())
 
 			if !shared.write_lock(ark_dir, lock_data.data[:]) {
 				fmt.println("ERROR: failed to write ark.lock")
@@ -235,6 +207,7 @@ install_package :: proc(ark_dir: string, options: []string) {
 			fmt.eprintln("Failed to checkout SHA to temporary build directory.")
 			os.exit(1)
 		}
+		defer git.remove_worktree(parent_path, repo_data.name, tmp_build_dir)
 
 		// run builder
 		fmt.println("Running builder")
@@ -243,13 +216,15 @@ install_package :: proc(ark_dir: string, options: []string) {
 		append(
 			&lock_data.data,
 			shared.Entry {
-				repo_data.name,
-				repo_data.spec,
-				ref_sha,
-				repo_data.url,
+				name      = repo_data.name,
+				version   = repo_data.spec,
+				sha       = ref_sha,
+				url       = repo_data.url,
 				// TODO: add in the binary title from the builder
-				"placeholder",
-				time.to_unix_seconds(time.now()),
+				binary    = "placeholder",
+				timestamp = time.to_unix_seconds(time.now()),
+				ref_kind  = ref_kind,
+				ref_name  = ref_name,
 			},
 		)
 

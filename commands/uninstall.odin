@@ -6,7 +6,6 @@ import "core:flags"
 import "core:fmt"
 import "core:os"
 import "core:slice"
-import "core:strings"
 
 Uninstall_Options :: struct {
 	package_name: string `args:"name=package,pos=0,required"`,
@@ -68,6 +67,7 @@ uninstall_package :: proc(ark_dir: string, options: []string) {
 
 	// Resolve symlink version
 	resolved_active_linked_file := shared.resolve_symlink_to_path(ark_dir, installed[0].binary)
+	defer delete(resolved_active_linked_file)
 	// path to the symlink itself, NOT the resolved target
 	symlink_path, _ := os.join_path({ark_dir, "bin", installed[0].binary}, context.allocator)
 	defer delete(symlink_path)
@@ -77,10 +77,10 @@ uninstall_package :: proc(ark_dir: string, options: []string) {
 	ok: bool
 	if parent_path, url_derived_name, ok = shared.repo_path_from_url(
 		ark_dir,
-		installed[0].repo,
+		installed[0].url,
 		context.allocator,
 	); !ok {
-		fmt.printfln("Invalid repo url: %s\n", installed[0].repo)
+		fmt.printfln("Invalid repo url: %s\n", installed[0].url)
 		os.exit(1)
 	}
 
@@ -118,25 +118,25 @@ uninstall_package :: proc(ark_dir: string, options: []string) {
 		return
 	}
 
-	// Version specified: find that version. Capture value and remove from array
-	found_entry: shared.Entry
-	found_index := -1
-	for entry, index in installed {
-		if entry.version == opts.version {
-			found_entry = entry
-			found_index = index
-			break
-		}
-	}
-	if found_index == -1 {
+	// A ref name selects its newest installed commit. A SHA prefix selects
+	// that exact immutable artifact.
+	found_entry, _, found := shared.find_entry(installed[:], url_derived_name, opts.version)
+	if !found {
 		fmt.printfln("%s version %s is not installed", url_derived_name, opts.version)
 		os.exit(1)
 	}
 
+	found_index := -1
+	for entry, index in installed {
+		if entry.sha == found_entry.sha {
+			found_index = index
+			break
+		}
+	}
 	ordered_remove(&installed, found_index)
 
 	versioned_build_dir, _ := os.join_path(
-		{ark_dir, "build", url_derived_name, opts.version},
+		{ark_dir, "build", url_derived_name, found_entry.sha},
 		context.allocator,
 	)
 	defer delete(versioned_build_dir)
@@ -145,7 +145,7 @@ uninstall_package :: proc(ark_dir: string, options: []string) {
 	remaining := make([dynamic]shared.Entry)
 	defer delete(remaining)
 	for entry in lock_data.data {
-		if entry.name == url_derived_name && entry.version == found_entry.version {
+		if entry.name == url_derived_name && entry.sha == found_entry.sha {
 			continue
 		}
 		append(&remaining, entry)
@@ -172,36 +172,23 @@ uninstall_package :: proc(ark_dir: string, options: []string) {
 	}
 
 	// remaining >= 1
-	// if requested version to uninstall is the same as the symlink version, relink
-	if resolved_active_linked_file != "" {
-		split_linked_path := strings.split(resolved_active_linked_file, "/")
-		defer delete(split_linked_path)
+	// If the removed commit was active, activate the next older commit.
+	if shared.is_active_version(ark_dir, url_derived_name, found_entry.sha, found_entry.binary) {
+		replacement := installed[min(found_index, len(installed) - 1)]
+		new_binary_to_link := shared.artifact_path(
+			ark_dir,
+			url_derived_name,
+			replacement.sha,
+			replacement.binary,
+		)
+		defer delete(new_binary_to_link)
 
-		if len(split_linked_path) >= 2 &&
-		   split_linked_path[len(split_linked_path) - 2] == opts.version {
-			// TODO: Below is very temporary, we will give the user the navigable. This does undesired behavior that needs documentation to understand and i dont like that.
-			// select screen to pick the version they want to be active after uninstall
-			// installed no longer holds the removed version, so every entry after
-			// found_index moved down by one place. The next older version is now at
-			// found_index. Clamp, because the removed version can be the last entry,
-			// and we dont want a out of bounds error.
-			replacement := installed[min(found_index, len(installed) - 1)]
-
-			new_binary_to_link := shared.artifact_path(
-				ark_dir,
-				url_derived_name,
-				replacement.version,
-				replacement.binary,
-			)
-			defer delete(new_binary_to_link)
-
-			if relink_err := shared.relink_binary_atomic(
-				ark_dir,
-				replacement.binary,
-				new_binary_to_link,
-			); relink_err != nil {
-				os.exit(1)
-			}
+		if relink_err := shared.relink_binary_atomic(
+			ark_dir,
+			replacement.binary,
+			new_binary_to_link,
+		); relink_err != nil {
+			os.exit(1)
 		}
 	}
 

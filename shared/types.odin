@@ -1,19 +1,28 @@
 package shared
 
 
+REF_KIND_TAG :: "tag"
+REF_KIND_BRANCH :: "branch"
+REF_KIND_COMMIT :: "commit"
+REF_KIND_DEFAULT :: "default"
+REF_KIND_LEGACY :: "legacy"
+
 Repo :: struct {
-	url:  string,
-	name: string,
-	spec: string, // this is the tag, HEAD, or sha
+	url:         string,
+	name:        string,
+	spec:        string,
+	default_ref: bool,
 }
 
 Entry :: struct {
 	name:      string,
 	version:   string,
 	sha:       string,
-	repo:      string,
+	url:       string,
 	binary:    string,
 	timestamp: i64,
+	ref_kind:  string,
+	ref_name:  string,
 }
 
 Lock_Data :: struct {

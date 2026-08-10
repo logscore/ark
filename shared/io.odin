@@ -5,7 +5,6 @@ package shared
 import "core:encoding/json"
 import "core:fmt"
 import "core:os"
-import "core:slice"
 import "core:strconv"
 import "core:strings"
 
@@ -38,9 +37,9 @@ resolve_symlink_to_path :: proc(ark_dir: string, binary_name: string) -> string 
 	return strings.clone(resolved_path)
 }
 
-// Path of a single installed build artifact. Returns OS specific path to artifact.
-artifact_path :: proc(ark_dir, name, version, binary: string) -> string {
-	path, path_error := os.join_path({ark_dir, "build", name, version, binary}, context.allocator)
+// Path of a single installed build artifact. The SHA is its stable identity.
+artifact_path :: proc(ark_dir, name, sha, binary: string) -> string {
+	path, path_error := os.join_path({ark_dir, "build", name, sha, binary}, context.allocator)
 	if path_error != nil {
 		fmt.eprintln("ERROR: failed to build artifact path:", path_error)
 		os.exit(1)
@@ -49,28 +48,55 @@ artifact_path :: proc(ark_dir, name, version, binary: string) -> string {
 	return path
 }
 
-// Is the artifact of this exact version on disk? Checks its a file, not dir
-artifact_exists :: proc(ark_dir, name, version, binary: string) -> bool {
-	path := artifact_path(ark_dir, name, version, binary)
+artifact_exists :: proc(ark_dir, name, sha, binary: string) -> bool {
+	path := artifact_path(ark_dir, name, sha, binary)
 	defer delete(path)
 
 	return os.is_file(path)
 }
 
-// Does bin/<binary> point at this exact version? The compare is valid because
-// every link holds an absolute artifact_path value.
-is_active_version :: proc(ark_dir, name, version, binary: string) -> bool {
+// Does bin/<binary> point at this exact commit?
+is_active_version :: proc(ark_dir, name, sha, binary: string) -> bool {
 	link_target := resolve_symlink_to_path(ark_dir, binary)
 	if link_target == "" {
 		return false
 	}
 	defer delete(link_target)
 
-	path := artifact_path(ark_dir, name, version, binary)
+	path := artifact_path(ark_dir, name, sha, binary)
 	defer delete(path)
 
 	return link_target == path
 }
+
+find_entry :: proc(
+	entries: []Entry,
+	name, selector: string,
+) -> (
+	entry: Entry,
+	index: int,
+	ok: bool,
+) {
+	index = -1
+	for candidate, candidate_index in entries {
+		// checks tag name, branch name, sha in that order
+		if candidate.name != name ||
+		   (selector != "" &&
+				   !(entry.version == selector ||
+						   entry.ref_name == selector ||
+						   (len(selector) >= 7 && strings.starts_with(entry.sha, selector)))) {
+			continue
+		}
+
+		if !ok || candidate.timestamp >= entry.timestamp {
+			entry = candidate
+			index = candidate_index
+			ok = true
+		}
+	}
+	return
+}
+
 
 read_lock :: proc(ark_dir: string) -> (lock_data: Lock_Data, ok: bool) {
 	ark_lock_path, ark_lock_path_error := os.join_path({ark_dir, "ark.lock"}, context.allocator)
@@ -97,7 +123,7 @@ read_lock :: proc(ark_dir: string) -> (lock_data: Lock_Data, ok: bool) {
 		}
 
 		parts := strings.fields(line, context.allocator)
-		if len(parts) != 6 {
+		if len(parts) != 6 && len(parts) != 8 {
 			fmt.eprintfln("invalid ark.lock entry at ~/.ark/ark.lock:%i", index + 1)
 			delete(parts, context.allocator)
 			delete(lock_data.data)
@@ -111,19 +137,29 @@ read_lock :: proc(ark_dir: string) -> (lock_data: Lock_Data, ok: bool) {
 			return {}, false
 		}
 
+		ref_kind := REF_KIND_LEGACY
+		ref_name := parts[1]
+		if len(parts) == 8 {
+			ref_kind = parts[6]
+			ref_name = parts[7]
+		}
+
 		append(
-			&lock_data.data, // There might be a memory bug where the lock_data is passed to caller. We delete it tho, so idk
+			&lock_data.data,
 			shared.Entry {
 				name = strings.clone(parts[0], context.allocator),
 				version = strings.clone(parts[1], context.allocator),
 				sha = strings.clone(parts[2], context.allocator),
-				repo = strings.clone(parts[3], context.allocator),
+				url = strings.clone(parts[3], context.allocator),
 				binary = strings.clone(parts[4], context.allocator),
 				timestamp = timestamp,
+				ref_kind = strings.clone(ref_kind, context.allocator),
+				ref_name = strings.clone(ref_name, context.allocator),
 			},
 		)
 		delete(parts, context.allocator)
 	}
+
 
 	return lock_data, true
 }
@@ -136,13 +172,15 @@ write_lock :: proc(ark_dir: string, entries: []Entry) -> bool {
 	for e in entries {
 		fmt.sbprintf(
 			&sb,
-			"%s %s %s %s %s %d\n",
+			"%s %s %s %s %s %d %s %s\n",
 			e.name,
 			e.version,
 			e.sha,
-			e.repo,
+			e.url,
 			e.binary,
 			e.timestamp,
+			e.ref_kind,
+			e.ref_name,
 		)
 	}
 

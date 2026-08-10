@@ -10,7 +10,9 @@ resolve_repo_to_sha :: proc(
 	parent_dir: string,
 	package_name: string,
 	repo_data: shared.Repo,
-) -> string {
+) -> (
+	ref_sha, ref_kind, ref_name: string,
+) {
 	cache_dir, _ := os.join_path({parent_dir, package_name}, context.allocator)
 	defer delete(cache_dir)
 
@@ -22,7 +24,6 @@ resolve_repo_to_sha :: proc(
 		_ = os.make_directory_all(parent_dir)
 		ok := clone_bare_copy(repo_data.url, package_name, parent_dir)
 		if !ok {
-			// fmt.printfln("ERROR: failed to clone to target directory: %s", full_repo_dir)
 			os.exit(1)
 		}
 
@@ -34,13 +35,22 @@ resolve_repo_to_sha :: proc(
 		os.exit(1)
 	}
 
-	ref_sha, spec_ok := resolve_spec_to_sha(cache_dir, repo_data.spec)
+	spec_ok: bool
+	ref_sha, ref_kind, ref_name, spec_ok = resolve_spec_to_sha(
+		cache_dir,
+		repo_data.spec,
+		repo_data.default_ref,
+	)
 	if !spec_ok {
-		fmt.eprintfln("Repository has no valid ref for version: %s", repo_data.spec)
+		spec := repo_data.spec
+		if repo_data.default_ref {
+			spec = "HEAD"
+		}
+		fmt.eprintfln("Repository has no valid ref for version: %s", spec)
 		os.exit(1)
 	}
 
-	return ref_sha
+	return
 }
 
 clone_bare_copy :: proc(repo_url: string, repo_name: string, repos_dir: string) -> bool {
@@ -101,74 +111,84 @@ fetch_remotes_and_tags :: proc(full_repo_dir: string) -> bool {
 	return true
 }
 
-resolve_spec_to_sha :: proc(full_repo_dir: string, spec: string) -> (ref_sha: string, ok: bool) {
-	refs := [3]string{"refs/tags/", "refs/heads/", ""}
-
-	for ref in refs {
-		read_pipe, write_pipe, pipe_err := os.pipe()
-		if pipe_err != nil {
-			return "", false
-		}
-
-		args := []string {
-			"git",
-			"-C",
-			full_repo_dir,
-			"rev-parse",
-			"--verify",
-			"--quiet",
-			"--end-of-options",
-			strings.concatenate({ref, spec, "^{commit}"}),
-		}
-
-		process, start_err := os.process_start(
-			os.Process_Desc {
-				command = args,
-				stdin = os.stdin,
-				stdout = write_pipe,
-				stderr = os.stderr,
-			},
-		)
-
-		os.close(write_pipe)
-
-		if start_err != nil {
-			os.close(read_pipe)
-			return "", false
-		}
-
-		state, wait_err := os.process_wait(process)
-		if wait_err != nil || state.exit_code != 0 {
-			os.close(read_pipe)
-			continue
-		}
-
-		pipe_data, read_err := os.read_entire_file_from_file(read_pipe, context.allocator)
-		os.close(read_pipe)
-
-		if read_err != nil {
-			return "", false
-		}
-		defer delete(pipe_data, context.allocator)
-
-		sha := strings.trim_space(string(pipe_data))
-		return strings.clone(sha), true
+resolve_ref_to_sha :: proc(full_repo_dir, ref: string) -> (ref_sha: string, ok: bool) {
+	read_pipe, write_pipe, pipe_err := os.pipe()
+	if pipe_err != nil {
+		return "", false
 	}
 
-	return "", false
+	commit_ref := strings.concatenate({ref, "^{commit}"})
+	defer delete(commit_ref)
+	args := []string {
+		"git",
+		"-C",
+		full_repo_dir,
+		"rev-parse",
+		"--verify",
+		"--quiet",
+		"--end-of-options",
+		commit_ref,
+	}
+
+	process, start_err := os.process_start(
+		os.Process_Desc{command = args, stdin = os.stdin, stdout = write_pipe, stderr = os.stderr},
+	)
+	os.close(write_pipe)
+
+	if start_err != nil {
+		os.close(read_pipe)
+		return "", false
+	}
+
+	state, wait_err := os.process_wait(process)
+	if wait_err != nil || state.exit_code != 0 {
+		os.close(read_pipe)
+		return "", false
+	}
+
+	pipe_data, read_err := os.read_entire_file_from_file(read_pipe, context.allocator)
+	os.close(read_pipe)
+	if read_err != nil {
+		return "", false
+	}
+	defer delete(pipe_data, context.allocator)
+
+	sha := strings.trim_space(string(pipe_data))
+	return strings.clone(sha), true
 }
 
-compare_fetched_sha_to_lock_sha :: proc(ref_sha: string, lock_data: shared.Lock_Data) {
-	for data in lock_data.data {
-		if ref_sha == data.sha {
-			fmt.eprintfln(
-				"Package already exists based on the resolved hash: %s. To bypass this check, run the same command with --force",
-				ref_sha,
-			)
-			os.exit(1)
-		}
+resolve_spec_to_sha :: proc(
+	full_repo_dir, spec: string,
+	default_ref: bool,
+) -> (
+	ref_sha, ref_kind, ref_name: string,
+	ok: bool,
+) {
+	if default_ref {
+		ref_sha, ok = resolve_ref_to_sha(full_repo_dir, "HEAD")
+		return ref_sha, shared.REF_KIND_DEFAULT, "HEAD", ok
 	}
-	return
+
+	tag_ref := strings.concatenate({"refs/tags/", spec})
+	defer delete(tag_ref)
+	branch_ref := strings.concatenate({"refs/heads/", spec})
+	defer delete(branch_ref)
+
+	tag_sha, tag_ok := resolve_ref_to_sha(full_repo_dir, tag_ref)
+	branch_sha, branch_ok := resolve_ref_to_sha(full_repo_dir, branch_ref)
+	if tag_ok {
+		if branch_ok {
+			fmt.eprintfln("WARNING: '%s' is both a tag and branch; using the tag.", spec)
+			delete(branch_sha)
+		}
+		return tag_sha, shared.REF_KIND_TAG, spec, true
+	}
+	if branch_ok {
+		return branch_sha, shared.REF_KIND_BRANCH, spec, true
+	}
+
+	ref_sha, ok = resolve_ref_to_sha(full_repo_dir, spec)
+	return ref_sha, shared.REF_KIND_COMMIT, spec, ok
 }
 
 checkout_to_sha :: proc(
@@ -233,6 +253,27 @@ checkout_to_sha :: proc(
 	}
 
 	return strings.clone(full_tmp_build_dir), true
+}
+
+remove_worktree :: proc(cache_parent_dir, package_name, worktree_dir: string) {
+	full_repo_path, path_error := os.join_path({cache_parent_dir, package_name}, context.allocator)
+	if path_error != nil {
+		fmt.eprintln("failed to build repository path during cleanup:", path_error)
+		return
+	}
+	defer delete(full_repo_path)
+
+	args := []string{"git", "-C", full_repo_path, "worktree", "remove", "--force", worktree_dir}
+	process, start_error := os.process_start({command = args})
+	if start_error != nil {
+		fmt.eprintln("failed to start Git worktree cleanup:", start_error)
+		return
+	}
+
+	state, wait_error := os.process_wait(process)
+	if wait_error != nil || state.exit_code != 0 {
+		fmt.eprintln("failed to remove temporary Git worktree:", worktree_dir)
+	}
 }
 
 ensure_git :: proc() {

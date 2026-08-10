@@ -19,9 +19,9 @@ rg 14.1.0 f1a2b3c github.com/BurntSushi/ripgrep rg 124567
 .ark/
   build/
     <tool> # clean build artifacts divided by version
-      v1.0.6/
+      <sha7>/
         tool
-      v1.0.4/
+      <sha7>/
         tool
     rg
       v14.5.6/
@@ -42,7 +42,7 @@ rg 14.1.0 f1a2b3c github.com/BurntSushi/ripgrep rg 124567
 
 ## commands
 
-- install <repo_url>  [--version <version>] [--force]: pulls, builds and installs the tool based on the repo_url. Force ignores the hash comparison block and pulls, rebuilds and reinstalls.
+- install <repo_url> [--version <version>] [--force]: pulls, builds and installs the tool based on the repo_url. Force ignores the hash comparison block and pulls, rebuilds and reinstalls.
 - uninstall <tool> [--version <version>]: uinstalls the tool. version is optional. Without it, we uninstall all instances of the tool. Might add a warning and --force command to the multi instance uninsnstall.
 - update <tool> --version <tagged_version> --force: updates the tool to hte most recent version. --version specifies the version to udate to (can be a lower version too. --force updates even if the version is already installed. Note on the lock file <> disk relationship when updating a package. Lock is the install(ed) intent. It tells us what the user wants on the system. The disk is the cache. Lock hit + disk cache miss is rebuildable. So we rebuild from that lock repo + sha.
 - list <tool> [--version <version>]: lists all the tools, displaying the active one with "* active" along side thier paths and repo source + commit sha. Version is optional and will only display that version.
@@ -72,21 +72,21 @@ It has one job. How do i build this repo into a binary and where do i stick the 
 
 ```json
 {
-    "$schema": "https://lsreeder.com/ark/schema.json", // or local path
-    "packages": [
-        {
-            "name": "mypackage",
-            "build": {
-                "build_tool": "cargo",
-                "version": "1.81.0",
-                "args": ["build", "--release"],
-                "env": {
-                    "FEATURE": "production"
-                }
-            },
-            // Note that the name of the binary file will be what is used in the terminal. "name" is what the user uses to manage the package.
-            "out": "target/release/pkg"
+  "$schema": "https://lsreeder.com/ark/schema.json", // or local path
+  "packages": [
+    {
+      "name": "mypackage",
+      "build": {
+        "build_tool": "cargo",
+        "version": "1.81.0",
+        "args": ["build", "--release"],
+        "env": {
+          "FEATURE": "production"
         }
-    ]
+      },
+      // Note that the name of the binary file will be what is used in the terminal. "name" is what the user uses to manage the package.
+      "out": "target/release/pkg"
+    }
+  ]
 }
 ```
