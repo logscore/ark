@@ -17,26 +17,29 @@ Install_Options :: struct {
 	force:    bool `args:"name=force"`,
 }
 
-install_package :: proc(ark_dir: string, options: []string) {
-	git.ensure_git()
+install_package :: proc(ark_dir: string, options: []string) -> (exit_code: int) {
+	if !git.ensure_git() {
+		return 1
+	}
 
 	opts: Install_Options
 	err := flags.parse(&opts, options, .Unix)
 	switch v in err {
 	case flags.Help_Request:
 		shared.print_help("install")
-		os.exit(0)
+		return 0
 	case flags.Parse_Error:
 		fmt.println(v.message)
-		os.exit(1)
+		return 1
 	case flags.Open_File_Error:
 		fmt.println("Could not open", v.filename)
-		os.exit(1)
+		return 1
 	case flags.Validation_Error:
 		fmt.println(v.message)
-		os.exit(1)
+		return 1
 	}
 
+	// TODO: Do i need to free this data?
 	repo_data := shared.Repo {
 		url         = "",
 		name        = "",
@@ -45,46 +48,51 @@ install_package :: proc(ark_dir: string, options: []string) {
 	}
 
 	// Sanitize url
-	normalized_url := strings.trim(strings.trim_space(opts.repo_url), "/")
+	trimmed_url := strings.trim(strings.trim_space(opts.repo_url), "/")
 
-	// parse url.
-	// TODO: eventually support bare github.com/user/tool or user/tool
-	scheme, host, full_path, _, _ := net.split_url(normalized_url)
+	// parse url
+	scheme, host, full_path, _, _ := net.split_url(trimmed_url, context.allocator)
 
-	base_path := strings.split(full_path, "@")[0]
+	clean_path, _ := strings.split_iterator(&full_path, "@")
+
 	if scheme == "" && strings.starts_with(host, "git@") {
-		repo_data.url = strings.concatenate({host, strings.split(full_path, "@")[0]})
+		repo_data.url = strings.concatenate({host, clean_path}, context.allocator)
 	} else if scheme == "https" {
-		repo_data.url = strings.concatenate({scheme, "://", host, base_path})
+		repo_data.url = strings.concatenate({scheme, "://", host, clean_path}, context.allocator)
 	} else {
 		fmt.printfln("Invalid repo url: %s\n", opts.repo_url)
-		os.exit(1)
+		return 1
 	}
 
 	parent_path: string
 	ok: bool
-	if parent_path, repo_data.name, ok = shared.repo_path_from_url(
-		ark_dir,
-		normalized_url,
-		context.allocator,
-	); !ok {
+	if parent_path, repo_data.name, ok = shared.repo_path_from_url(ark_dir, repo_data.url); !ok {
 		fmt.printfln("Invalid repo url: %s\n", opts.repo_url)
-		os.exit(1)
+		return 1
 	}
 
-	defer delete(parent_path)
+	defer delete(parent_path, context.allocator)
 
 	// Fetch refs and resolve the requested tag, branch, or commit.
-	ref_sha, ref_kind, ref_name := git.resolve_repo_to_sha(parent_path, repo_data.name, repo_data)
+	ref_sha, ref_kind, ref_name: string
+	if ref_sha, ref_kind, ref_name, ok = git.resolve_repo_to_sha(
+		parent_path,
+		repo_data.name,
+		repo_data,
+	); !ok {
+		return 1
+	}
 
 	if repo_data.default_ref {
 		repo_data.spec = ref_sha[:7]
 	}
 
-	lock_data, lock_ok := shared.read_lock(ark_dir)
+	lock_data, lock_ok := shared.read_lock(ark_dir, context.allocator)
 	if !lock_ok {
-		os.exit(1)
+		return 1
 	}
+
+	defer shared.free_lock_data(&lock_data, context.allocator)
 
 	installed_index := -1
 	for line, index in lock_data.data {
@@ -116,7 +124,7 @@ install_package :: proc(ark_dir: string, options: []string) {
 						"Failed to checkout ref %s to temporary build directory.",
 						ref_sha[:7],
 					)
-					os.exit(1)
+					return 1
 				}
 				defer git.remove_worktree(parent_path, repo_data.name, tmp_build_dir)
 
@@ -134,7 +142,7 @@ install_package :: proc(ark_dir: string, options: []string) {
 
 				if !shared.write_lock(ark_dir, lock_data.data[:]) {
 					fmt.println("ERROR: failed to write ark.lock")
-					os.exit(1)
+					return 1
 				}
 
 				// run installer
@@ -147,7 +155,7 @@ install_package :: proc(ark_dir: string, options: []string) {
 						repo_data.name,
 						entry.version,
 					)
-					os.exit(1)
+					return 1
 				}
 
 				target := shared.artifact_path(ark_dir, entry.name, entry.sha, entry.binary)
@@ -155,7 +163,7 @@ install_package :: proc(ark_dir: string, options: []string) {
 
 				if relink_err := shared.relink_binary_atomic(ark_dir, entry.binary, target);
 				   relink_err != nil {
-					os.exit(1)
+					return 1
 				}
 
 				fmt.printfln(
@@ -184,7 +192,7 @@ install_package :: proc(ark_dir: string, options: []string) {
 					"Failed to checkout ref %s to temporary build directory.",
 					ref_sha[:7],
 				)
-				os.exit(1)
+				return 1
 			}
 			defer git.remove_worktree(parent_path, repo_data.name, tmp_build_dir)
 
@@ -202,7 +210,7 @@ install_package :: proc(ark_dir: string, options: []string) {
 
 			if !shared.write_lock(ark_dir, lock_data.data[:]) {
 				fmt.println("ERROR: failed to write ark.lock")
-				os.exit(1)
+				return 1
 			}
 
 			// run installer
@@ -218,7 +226,7 @@ install_package :: proc(ark_dir: string, options: []string) {
 		)
 		if !checkout_ok {
 			fmt.eprintln("Failed to checkout SHA to temporary build directory.")
-			os.exit(1)
+			return 1
 		}
 		defer git.remove_worktree(parent_path, repo_data.name, tmp_build_dir)
 
@@ -249,9 +257,10 @@ install_package :: proc(ark_dir: string, options: []string) {
 
 		if !shared.write_lock(ark_dir, lock_data.data[:]) {
 			fmt.println("ERROR: failed to write ark.lock")
-			os.exit(1)
+			return 1
 		}
-		fmt.println("Running installer")
 		// run installer
+		fmt.println("Running installer")
 	}
+	return 0
 }

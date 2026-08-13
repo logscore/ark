@@ -27,7 +27,10 @@ rg 14.1.0 f1a2b3c github.com/BurntSushi/ripgrep rg 124567
       v14.5.6/
         rg
   repos/
-    <repo_url_hash>.git # Dirty, holds the git clones, refs and tags
+    <host>/
+      <path_to>
+        <repo_name>.git # Dirty, holds the git clones, refs and tags
+
   bin/ # symlinks to build/ dir binaries
     rg
     tool

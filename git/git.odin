@@ -12,6 +12,7 @@ resolve_repo_to_sha :: proc(
 	repo_data: shared.Repo,
 ) -> (
 	ref_sha, ref_kind, ref_name: string,
+	ok: bool,
 ) {
 	cache_dir, _ := os.join_path({parent_dir, package_name}, context.allocator)
 	defer delete(cache_dir)
@@ -24,15 +25,16 @@ resolve_repo_to_sha :: proc(
 		_ = os.make_directory_all(parent_dir)
 		ok := clone_bare_copy(repo_data.url, package_name, parent_dir)
 		if !ok {
-			os.exit(1)
+			fmt.eprintln("ERROR: failed to clone repo to: %s", cache_dir)
+			return "", "", "", false
 		}
 
 		fmt.println("\nSuccessfully cloned to:", cache_dir)
 	}
 
 	if !fetch_remotes_and_tags(cache_dir) {
-		fmt.eprintln("Failed to fetch remote branches and tags.")
-		os.exit(1)
+		fmt.eprintln("ERROR: failed to fetch remote branches and tags.")
+		return "", "", "", false
 	}
 
 	spec_ok: bool
@@ -47,10 +49,10 @@ resolve_repo_to_sha :: proc(
 			spec = "HEAD"
 		}
 		fmt.eprintfln("Repository has no valid ref for version: %s", spec)
-		os.exit(1)
+		return "", "", "", false
 	}
 
-	return
+	return ref_sha, ref_kind, ref_name, true
 }
 
 clone_bare_copy :: proc(repo_url: string, repo_name: string, repos_dir: string) -> bool {
@@ -204,8 +206,8 @@ checkout_to_sha :: proc(
 	defer delete(tmp_dir, context.allocator)
 
 	if tmp_dir_error != nil {
-		fmt.println("Failed to build tmp directory during fetch.")
-		os.exit(1)
+		fmt.eprintln("ERROR: Failed to build tmp directory during fetch.")
+		return "", false
 	}
 
 	full_tmp_build_dir, err := os.mkdir_temp(
@@ -239,27 +241,27 @@ checkout_to_sha :: proc(
 	)
 	if start_err != nil {
 		fmt.eprintln("failed to start git:", start_err)
-		os.exit(1)
+		return "", false
 	}
 
 	state, wait_err := os.process_wait(p)
 	if wait_err != nil {
 		fmt.eprintln("failed to wait for git:", wait_err)
-		os.exit(1)
+		return "", false
 	}
 	if state.exit_code != 0 {
 		fmt.eprintln("git failed:", state)
-		os.exit(1)
+		return "", false
 	}
 
 	return strings.clone(full_tmp_build_dir), true
 }
 
-remove_worktree :: proc(cache_parent_dir, package_name, worktree_dir: string) {
+remove_worktree :: proc(cache_parent_dir, package_name, worktree_dir: string) -> (ok: bool) {
 	full_repo_path, path_error := os.join_path({cache_parent_dir, package_name}, context.allocator)
 	if path_error != nil {
 		fmt.eprintln("failed to build repository path during cleanup:", path_error)
-		return
+		return false
 	}
 	defer delete(full_repo_path)
 
@@ -267,20 +269,24 @@ remove_worktree :: proc(cache_parent_dir, package_name, worktree_dir: string) {
 	process, start_error := os.process_start({command = args})
 	if start_error != nil {
 		fmt.eprintln("failed to start Git worktree cleanup:", start_error)
-		return
+		return false
 	}
 
 	state, wait_error := os.process_wait(process)
 	if wait_error != nil || state.exit_code != 0 {
 		fmt.eprintln("failed to remove temporary Git worktree:", worktree_dir)
+		return false
 	}
+	return true
 }
 
-ensure_git :: proc() {
+// TODO: Change this to something maybe more efficient. Like finding it in the file system and checking the bytes are an executable
+ensure_git :: proc() -> bool {
 	_, _, _, error := os.process_exec({command = {"git", "--version"}}, context.allocator)
 
 	if error != nil {
 		fmt.eprintfln("ERROR: git is not installed on system PATH")
-		os.exit(1)
+		return false
 	}
+	return true
 }

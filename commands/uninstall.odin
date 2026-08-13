@@ -12,31 +12,32 @@ Uninstall_Options :: struct {
 	version:      string `args:"name=version"`,
 }
 
-uninstall_package :: proc(ark_dir: string, options: []string) {
+uninstall_package :: proc(ark_dir: string, options: []string) -> (exit_code: int) {
 	opts: Uninstall_Options
 	err := flags.parse(&opts, options, .Unix)
 	switch v in err {
 	case flags.Help_Request:
 		shared.print_help("uninstall")
-		os.exit(0)
+		return 0
 	case flags.Parse_Error:
 		fmt.println(v.message)
-		os.exit(1)
+		return 1
 	case flags.Open_File_Error:
 		fmt.println("Could not open", v.filename)
-		os.exit(1)
+		return 1
 	case flags.Validation_Error:
 		fmt.println(v.message)
-		os.exit(1)
+		return 1
 	}
 
-	lock_data, lock_ok := shared.read_lock(ark_dir)
+	lock_data, lock_ok := shared.read_lock(ark_dir, context.allocator)
 	if !lock_ok {
-		fmt.println("ERROR: failed to read ark.lock file")
-		os.exit(1)
+		return 1
 	}
-	defer delete(lock_data.data)
 
+	defer shared.free_lock_data(&lock_data, context.allocator)
+
+	// TODO: could probably replace this with the shared.find_entry() proc
 	// filter lock data to only the name of the package requested
 	installed := make([dynamic]shared.Entry)
 	defer delete(installed)
@@ -57,7 +58,7 @@ uninstall_package :: proc(ark_dir: string, options: []string) {
 		// 	fmt.println("stale files found, run 'ark clean' to remove them")
 		// }
 
-		os.exit(1)
+		return 1
 	}
 
 	// sort installed array by installed time, newest first
@@ -75,13 +76,10 @@ uninstall_package :: proc(ark_dir: string, options: []string) {
 	parent_path: string
 	url_derived_name: string
 	ok: bool
-	if parent_path, url_derived_name, ok = shared.repo_path_from_url(
-		ark_dir,
-		installed[0].url,
-		context.allocator,
-	); !ok {
+	if parent_path, url_derived_name, ok = shared.repo_path_from_url(ark_dir, installed[0].url);
+	   !ok {
 		fmt.printfln("Invalid repo url: %s\n", installed[0].url)
-		os.exit(1)
+		return 1
 	}
 
 	defer delete(parent_path)
@@ -113,9 +111,9 @@ uninstall_package :: proc(ark_dir: string, options: []string) {
 		}
 		if !shared.write_lock(ark_dir, remaining[:]) {
 			fmt.println("ERROR: failed to write ark.lock")
-			os.exit(1)
+			return 1
 		}
-		return
+		return 0
 	}
 
 	// A ref name selects its newest installed commit. A SHA prefix selects
@@ -123,7 +121,7 @@ uninstall_package :: proc(ark_dir: string, options: []string) {
 	found_entry, _, found := shared.find_entry(installed[:], url_derived_name, opts.version)
 	if !found {
 		fmt.printfln("%s version %s is not installed", url_derived_name, opts.version)
-		os.exit(1)
+		return 1
 	}
 
 	found_index := -1
@@ -166,9 +164,9 @@ uninstall_package :: proc(ark_dir: string, options: []string) {
 
 		if !shared.write_lock(ark_dir, remaining[:]) {
 			fmt.println("ERROR: failed to write ark.lock")
-			os.exit(1)
+			return 1
 		}
-		return
+		return 0
 	}
 
 	// remaining >= 1
@@ -188,7 +186,7 @@ uninstall_package :: proc(ark_dir: string, options: []string) {
 			replacement.binary,
 			new_binary_to_link,
 		); relink_err != nil {
-			os.exit(1)
+			return 1
 		}
 	}
 
@@ -196,6 +194,7 @@ uninstall_package :: proc(ark_dir: string, options: []string) {
 
 	if !shared.write_lock(ark_dir, remaining[:]) {
 		fmt.println("ERROR: failed to write ark.lock")
-		os.exit(1)
+		return 1
 	}
+	return 0
 }

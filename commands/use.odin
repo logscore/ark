@@ -12,30 +12,31 @@ Use_Options :: struct {
 }
 
 // TODO: Eventually we will add --global (default), --local, and --shell
-use_package :: proc(ark_dir: string, options: []string) {
+use_package :: proc(ark_dir: string, options: []string) -> (exit_code: int) {
 	opts: Use_Options
 	err := flags.parse(&opts, options, .Unix)
 	switch v in err {
 	case flags.Help_Request:
 		shared.print_help("use")
-		os.exit(0)
+		return 0
 	case flags.Parse_Error:
 		fmt.println(v.message)
-		os.exit(1)
+		return 1
 	case flags.Open_File_Error:
 		fmt.println("Could not open", v.filename)
-		os.exit(1)
+		return 1
 	case flags.Validation_Error:
 		fmt.println(v.message)
-		os.exit(1)
+		return 1
 	}
 
 	// Check that the package exists.
-	lock_data, lock_ok := shared.read_lock(ark_dir)
+	lock_data, lock_ok := shared.read_lock(ark_dir, context.allocator)
 	if !lock_ok {
-		os.exit(1)
+		return 1
 	}
-	defer delete(lock_data.data)
+
+	defer shared.free_lock_data(&lock_data, context.allocator)
 
 	installed, _, found := shared.find_entry(lock_data.data[:], opts.package_name, opts.version)
 
@@ -45,13 +46,13 @@ use_package :: proc(ark_dir: string, options: []string) {
 			opts.package_name,
 			opts.version,
 		)
-		os.exit(1)
+		return 1
 	}
 
 	// Is the requested version already the active one?
 	if shared.is_active_version(ark_dir, opts.package_name, installed.sha, installed.binary) {
 		fmt.printfln("%[0]s of version %[1]s is already active.", opts.package_name, opts.version)
-		return
+		return 0
 	}
 
 	if !shared.artifact_exists(ark_dir, opts.package_name, installed.sha, installed.binary) {
@@ -61,7 +62,7 @@ use_package :: proc(ark_dir: string, options: []string) {
 			opts.version,
 			installed.url,
 		)
-		os.exit(1)
+		return 1
 	}
 
 	new_binary_file_to_link := shared.artifact_path(
@@ -77,6 +78,8 @@ use_package :: proc(ark_dir: string, options: []string) {
 		installed.binary,
 		new_binary_file_to_link,
 	); relink_err != nil {
-		os.exit(1)
+		return 1
 	}
+
+	return 0
 }

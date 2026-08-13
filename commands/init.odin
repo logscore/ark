@@ -1,15 +1,13 @@
 package commands
 
-import "core:flags"
 import "core:fmt"
 import "core:os"
-import "vendor:curl"
 
 import "../shared"
 
 ARK_ITEMS :: [?]string{"bin", "build", "tmp", "repos"}
 
-init_ark :: proc(ark_dir: string, options: []string) {
+init_ark :: proc(ark_dir: string, options: []string) -> (exit_code: int) {
 	// Make all .ark dirs
 	for folder in ARK_ITEMS {
 		ark_sub_dir, _ := os.join_path({ark_dir, folder}, context.allocator)
@@ -19,9 +17,12 @@ init_ark :: proc(ark_dir: string, options: []string) {
 		}
 	}
 
-	ark_lock, _ := os.join_path({ark_dir, "ark.lock"}, context.allocator)
-
-	defer delete(ark_lock)
+	ark_lock, error := os.join_path({ark_dir, "ark.lock"}, context.allocator)
+	defer delete(ark_lock, context.allocator)
+	if error != nil {
+		fmt.println("Failed to get ark lock file path.")
+		return 1
+	}
 
 	// Create ark.lock
 	if !shared.check_file_or_folder_exists(ark_lock) {
@@ -31,7 +32,7 @@ init_ark :: proc(ark_dir: string, options: []string) {
 		)
 		if err != nil {
 			fmt.println("ERROR: Failed to initialize ark.lock file:")
-			os.exit(1)
+			return 1
 		}
 	}
 
@@ -52,11 +53,11 @@ init_ark :: proc(ark_dir: string, options: []string) {
 		)
 		if err != nil {
 			fmt.println("ERROR: Failed to initialize schema.json file:")
-			os.exit(1)
+			return 1
 		}
 	}
 
-	return
+	return 0
 }
 
 // add_ark_to_path :: proc() {

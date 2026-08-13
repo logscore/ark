@@ -1,5 +1,6 @@
 package shared
 
+import "base:runtime"
 import "core:bytes"
 import "core:encoding/json"
 import "core:fmt"
@@ -94,11 +95,17 @@ find_entry :: proc(
 	return
 }
 
-read_lock :: proc(ark_dir: string) -> (lock_data: Lock_Data, ok: bool) {
+read_lock :: proc(
+	ark_dir: string,
+	allocator: runtime.Allocator = context.allocator,
+) -> (
+	lock_data: Lock_Data,
+	ok: bool,
+) {
 	ark_lock_path, ark_lock_path_error := os.join_path({ark_dir, "ark.lock"}, context.allocator)
 	defer delete(ark_lock_path, context.allocator)
 	if ark_lock_path_error != nil {
-		fmt.println("Failed to build .ark directory during initialization.")
+		fmt.eprintln("ERROR: could not build .ark directory during initialization.")
 		return {}, false
 	}
 
@@ -124,7 +131,7 @@ read_lock :: proc(ark_dir: string) -> (lock_data: Lock_Data, ok: bool) {
 		count: u8 = 0
 		for part in bytes.split_iterator(&trimmed_line_bytes, []byte{' '}) {
 			if count >= len(parts) {
-				fmt.eprintfln("invalid ark.lock entry at ~/.ark/ark.lock:%i", index + 1)
+				fmt.eprintfln("Invalid ark.lock entry at ~/.ark/ark.lock:%i", index + 1)
 
 				free_lock_data(&lock_data, context.allocator)
 
@@ -135,7 +142,7 @@ read_lock :: proc(ark_dir: string) -> (lock_data: Lock_Data, ok: bool) {
 		}
 
 		if count != len(parts) {
-			fmt.eprintfln("invalid ark.lock entry at ~/.ark/ark.lock:%i", index + 1)
+			fmt.eprintfln("Invalid ark.lock entry at ~/.ark/ark.lock:%i", index + 1)
 
 			free_lock_data(&lock_data, context.allocator)
 
@@ -144,7 +151,7 @@ read_lock :: proc(ark_dir: string) -> (lock_data: Lock_Data, ok: bool) {
 
 		timestamp, ok := strconv.parse_i64(string(parts[5]))
 		if !ok {
-			fmt.eprintfln("invalid timestamp at ~/.ark/ark.lock:%i", index + 1)
+			fmt.eprintfln("Invalid timestamp at ~/.ark/ark.lock:%i", index + 1)
 
 			free_lock_data(&lock_data, context.allocator)
 
@@ -192,7 +199,7 @@ write_lock :: proc(ark_dir: string, entries: []Entry) -> bool {
 	}
 
 	lock_path, _ := os.join_path({ark_dir, "ark.lock"}, context.allocator)
-	defer delete(lock_path)
+	defer delete(lock_path, context.allocator)
 
 	file_write_err := os.write_entire_file(lock_path, transmute([]byte)strings.to_string(sb))
 
@@ -211,7 +218,7 @@ read_user_config :: proc(ark_dir: string) -> (User_Config, bool) {
 	defer delete(user_config_path, context.allocator)
 
 	if user_config_path_error != nil {
-		fmt.println("Failed to build .ark directory during initialization.")
+		fmt.eprintln("ERROR: could not build .ark directory during initialization.")
 		return User_Config{}, false
 	}
 
@@ -228,7 +235,8 @@ read_user_config :: proc(ark_dir: string) -> (User_Config, bool) {
 	}
 
 	config: User_Config
-	err := json.unmarshal(user_config_file, &config)
+	// TODO: Error handling
+	err := json.unmarshal(user_config_file, &config, allocator = context.allocator)
 	defer delete(user_config_file, context.allocator)
 
 	return config, true
@@ -266,7 +274,6 @@ relink_binary_atomic :: proc(
 repo_path_from_url :: proc(
 	ark_dir: string,
 	url: string,
-	allocator := context.allocator,
 ) -> (
 	parent: string,
 	name: string,
@@ -286,26 +293,23 @@ repo_path_from_url :: proc(
 		return "", "", false
 	}
 
-	segments := strings.split(rest, "/", context.temp_allocator)
-
-	// Validate that there are no path traversals. Im sure this can be more robust
-	for seg in segments {
+	segment_count := 0
+	cursor := rest
+	for seg in strings.split_iterator(&cursor, "/") {
 		if seg == "" || seg == "." || seg == ".." {
 			return "", "", false
 		}
+		segment_count += 1
 	}
 
-	parts := make([dynamic]string, 0, len(segments) + 2, context.temp_allocator)
-	defer delete(parts)
-	append(&parts, ark_dir, "repos")
-	append(&parts, ..segments)
+	if segment_count < 2 {
+		return "", "", false
+	}
 
-	// Extract name value and remove from array
-	// Note we may not need to do this. We might be able to just index into the array and return that
-	name = strings.clone(segments[len(segments) - 1], allocator)
-	pop(&parts)
+	name_index := strings.last_index_byte(rest, '/')
+	name = rest[name_index + 1:]
 
-	parent, _ = os.join_path(parts[:], allocator)
+	parent, _ = os.join_path({ark_dir, "repos", rest[:name_index]}, context.allocator)
 
 	return parent, name, true
 }

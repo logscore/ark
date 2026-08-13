@@ -14,49 +14,47 @@ Update_Options :: struct {
 	version:      string `args:"name=version"`,
 }
 
-update_package :: proc(ark_dir: string, options: []string) {
-	git.ensure_git()
+update_package :: proc(ark_dir: string, options: []string) -> (exit_code: int) {
+	if !git.ensure_git() {
+		return 1
+	}
 
 	opts: Update_Options
 	err := flags.parse(&opts, options, .Unix)
 	switch v in err {
 	case flags.Help_Request:
 		shared.print_help("update")
-		os.exit(0)
+		return 0
 	case flags.Parse_Error:
 		fmt.println(v.message)
-		os.exit(1)
+		return 1
 	case flags.Open_File_Error:
 		fmt.println("Could not open", v.filename)
-		os.exit(1)
+		return 1
 	case flags.Validation_Error:
 		fmt.println(v.message)
-		os.exit(1)
+		return 1
 	}
 
-	lock_data, lock_ok := shared.read_lock(ark_dir)
+	lock_data, lock_ok := shared.read_lock(ark_dir, context.allocator)
 	if !lock_ok {
-		fmt.println("ERROR: failed to read ark.lock file")
-		os.exit(1)
+		return 1
 	}
-	defer delete(lock_data.data)
+
+	defer shared.free_lock_data(&lock_data, context.allocator)
 
 	latest, _, installed := shared.find_entry(lock_data.data[:], opts.package_name, "")
 	if !installed {
 		fmt.printfln(`%s not installed, use 'ark install'`, opts.package_name)
-		os.exit(1)
+		return 1
 	}
 
 	parent_path: string
 	url_derived_name: string
 	ok: bool
-	if parent_path, url_derived_name, ok = shared.repo_path_from_url(
-		ark_dir,
-		latest.url,
-		context.allocator,
-	); !ok {
+	if parent_path, url_derived_name, ok = shared.repo_path_from_url(ark_dir, latest.url); !ok {
 		fmt.printfln("Invalid repo url: %s\n", latest.url)
-		os.exit(1)
+		return 1
 	}
 	defer delete(parent_path)
 
@@ -74,11 +72,15 @@ update_package :: proc(ark_dir: string, options: []string) {
 		}
 	}
 
-	ref_sha, ref_kind, ref_name := git.resolve_repo_to_sha(
+	ref_sha, ref_kind, ref_name: string
+	if ref_sha, ref_kind, ref_name, ok = git.resolve_repo_to_sha(
 		parent_path,
 		url_derived_name,
 		repo_data,
-	)
+	); !ok {
+		return 1
+	}
+
 	version := repo_data.spec
 	if repo_data.default_ref {
 		version = ref_sha[:7]
@@ -103,14 +105,14 @@ update_package :: proc(ark_dir: string, options: []string) {
 					url_derived_name,
 					matched.version,
 				)
-				os.exit(1)
+				return 1
 			}
 
 			target := shared.artifact_path(ark_dir, matched.name, matched.sha, matched.binary)
 			defer delete(target)
 			if relink_err := shared.relink_binary_atomic(ark_dir, matched.binary, target);
 			   relink_err != nil {
-				os.exit(1)
+				return 1
 			}
 
 			fmt.printfln(
@@ -118,7 +120,7 @@ update_package :: proc(ark_dir: string, options: []string) {
 				url_derived_name,
 				matched.version,
 			)
-			return
+			return 0
 		}
 
 		if !artifact_found {
@@ -137,7 +139,7 @@ update_package :: proc(ark_dir: string, options: []string) {
 		)
 		if !checkout_ok {
 			fmt.eprintfln("Failed to checkout ref %s.", ref_sha[:7])
-			os.exit(1)
+			return 1
 		}
 		defer git.remove_worktree(parent_path, url_derived_name, tmp_build_dir)
 
@@ -146,10 +148,10 @@ update_package :: proc(ark_dir: string, options: []string) {
 		lock_data.data[matched_index].timestamp = time.to_unix_seconds(time.now())
 		if !shared.write_lock(ark_dir, lock_data.data[:]) {
 			fmt.println("ERROR: failed to write ark.lock")
-			os.exit(1)
+			return 1
 		}
 		fmt.println("Running installer")
-		return
+		return 0
 	}
 
 	tmp_build_dir, checkout_ok := git.checkout_to_sha(
@@ -160,7 +162,7 @@ update_package :: proc(ark_dir: string, options: []string) {
 	)
 	if !checkout_ok {
 		fmt.eprintln("Failed to checkout SHA to temporary build directory.")
-		os.exit(1)
+		return 1
 	}
 	defer git.remove_worktree(parent_path, url_derived_name, tmp_build_dir)
 
@@ -181,7 +183,9 @@ update_package :: proc(ark_dir: string, options: []string) {
 	)
 	if !shared.write_lock(ark_dir, lock_data.data[:]) {
 		fmt.println("ERROR: failed to write ark.lock")
-		os.exit(1)
+		return 1
 	}
 	fmt.println("Running installer")
+
+	return 0
 }
