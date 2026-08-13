@@ -11,6 +11,7 @@ init_ark :: proc(ark_dir: string, options: []string) -> (exit_code: int) {
 	// Make all .ark dirs
 	for folder in ARK_ITEMS {
 		ark_sub_dir, _ := os.join_path({ark_dir, folder}, context.allocator)
+		defer delete(ark_sub_dir, context.allocator)
 		// If the folder doesnt exist, make it
 		if !shared.check_file_or_folder_exists(ark_sub_dir) {
 			os.make_directory_all(ark_sub_dir)
@@ -43,6 +44,7 @@ init_ark :: proc(ark_dir: string, options: []string) -> (exit_code: int) {
 	// Save OS path to a varaible to inject into the ark.json $schema
 	// TODO: If ark.json doesnt exist, check the schema.json exists ,make it if not,
 	ark_schema, _ := os.join_path({ark_dir, "schema.json"}, context.allocator)
+	defer delete(ark_schema, context.allocator)
 	if !shared.check_file_or_folder_exists(ark_lock) {
 		err := os.write_entire_file_from_string(
 			ark_lock,

@@ -6,6 +6,7 @@ import shared "../shared"
 import "core:flags"
 import "core:fmt"
 import "core:os"
+import "core:strings"
 import "core:time"
 
 Update_Options :: struct {
@@ -80,6 +81,7 @@ update_package :: proc(ark_dir: string, options: []string) -> (exit_code: int) {
 	); !ok {
 		return 1
 	}
+	defer delete(ref_sha, context.allocator)
 
 	version := repo_data.spec
 	if repo_data.default_ref {
@@ -141,6 +143,7 @@ update_package :: proc(ark_dir: string, options: []string) -> (exit_code: int) {
 			fmt.eprintfln("Failed to checkout ref %s.", ref_sha[:7])
 			return 1
 		}
+		defer delete(tmp_build_dir, context.allocator)
 		defer git.remove_worktree(parent_path, url_derived_name, tmp_build_dir)
 
 		fmt.println("Running builder")
@@ -164,21 +167,23 @@ update_package :: proc(ark_dir: string, options: []string) -> (exit_code: int) {
 		fmt.eprintln("Failed to checkout SHA to temporary build directory.")
 		return 1
 	}
+	defer delete(tmp_build_dir, context.allocator)
 	defer git.remove_worktree(parent_path, url_derived_name, tmp_build_dir)
 
 	fmt.println("Running builder")
 	fmt.println("Updating lock")
 	append(
 		&lock_data.data,
+		// Same as lock_data, can we do this without cloning every piece?
 		shared.Entry {
-			name = url_derived_name,
-			version = version,
-			sha = ref_sha,
-			url = latest.url,
-			binary = "placeholder",
+			name = strings.clone(url_derived_name),
+			version = strings.clone(version),
+			sha = strings.clone(ref_sha),
+			url = strings.clone(latest.url),
+			binary = strings.clone("placeholder"),
 			timestamp = time.to_unix_seconds(time.now()),
-			ref_kind = ref_kind,
-			ref_name = ref_name,
+			ref_kind = strings.clone(ref_kind),
+			ref_name = strings.clone(ref_name),
 		},
 	)
 	if !shared.write_lock(ark_dir, lock_data.data[:]) {

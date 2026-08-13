@@ -58,14 +58,10 @@ resolve_repo_to_sha :: proc(
 clone_bare_copy :: proc(repo_url: string, repo_name: string, repos_dir: string) -> bool {
 	args := []string{"git", "clone", "--bare", "--filter=blob:none", repo_url, repo_name}
 
-	// Needs PATH for ssh
-	env, _ := os.environ(context.allocator)
-
 	p, start_err := os.process_start(
 		os.Process_Desc {
 			working_dir = repos_dir,
 			command = args,
-			env = env,
 			stdin = os.stdin,
 			stdout = os.stdout,
 			stderr = os.stderr,
@@ -74,7 +70,6 @@ clone_bare_copy :: proc(repo_url: string, repo_name: string, repos_dir: string) 
 	if start_err != nil {
 		return false
 	}
-	delete(env)
 
 	state, wait_err := os.process_wait(p)
 	if wait_err != nil {
@@ -210,11 +205,9 @@ checkout_to_sha :: proc(
 		return "", false
 	}
 
-	full_tmp_build_dir, err := os.mkdir_temp(
-		tmp_dir,
-		strings.concatenate({package_name, "-"}),
-		context.allocator,
-	)
+	tmp_pattern := strings.concatenate({package_name, "-"})
+	defer delete(tmp_pattern)
+	full_tmp_build_dir, err := os.mkdir_temp(tmp_dir, tmp_pattern, context.allocator)
 	if err != nil {
 		fmt.eprintln("failed to create temp build directory:", err)
 		return "", false
@@ -282,7 +275,12 @@ remove_worktree :: proc(cache_parent_dir, package_name, worktree_dir: string) ->
 
 // TODO: Change this to something maybe more efficient. Like finding it in the file system and checking the bytes are an executable
 ensure_git :: proc() -> bool {
-	_, _, _, error := os.process_exec({command = {"git", "--version"}}, context.allocator)
+	_, stdout, stderr, error := os.process_exec(
+		{command = {"git", "--version"}},
+		context.allocator,
+	)
+	defer delete(stdout, context.allocator)
+	defer delete(stderr, context.allocator)
 
 	if error != nil {
 		fmt.eprintfln("ERROR: git is not installed on system PATH")

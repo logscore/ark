@@ -39,7 +39,6 @@ install_package :: proc(ark_dir: string, options: []string) -> (exit_code: int) 
 		return 1
 	}
 
-	// TODO: Do i need to free this data?
 	repo_data := shared.Repo {
 		url         = "",
 		name        = "",
@@ -51,7 +50,8 @@ install_package :: proc(ark_dir: string, options: []string) -> (exit_code: int) 
 	trimmed_url := strings.trim(strings.trim_space(opts.repo_url), "/")
 
 	// parse url
-	scheme, host, full_path, _, _ := net.split_url(trimmed_url, context.allocator)
+	scheme, host, full_path, queries, _ := net.split_url(trimmed_url, context.allocator)
+	delete(queries)
 
 	clean_path, _ := strings.split_iterator(&full_path, "@")
 
@@ -63,6 +63,7 @@ install_package :: proc(ark_dir: string, options: []string) -> (exit_code: int) 
 		fmt.printfln("Invalid repo url: %s\n", opts.repo_url)
 		return 1
 	}
+	defer delete(repo_data.url, context.allocator)
 
 	parent_path: string
 	ok: bool
@@ -82,6 +83,7 @@ install_package :: proc(ark_dir: string, options: []string) -> (exit_code: int) 
 	); !ok {
 		return 1
 	}
+	defer delete(ref_sha, context.allocator)
 
 	if repo_data.default_ref {
 		repo_data.spec = ref_sha[:7]
@@ -126,6 +128,7 @@ install_package :: proc(ark_dir: string, options: []string) -> (exit_code: int) 
 					)
 					return 1
 				}
+				defer delete(tmp_build_dir, context.allocator)
 				defer git.remove_worktree(parent_path, repo_data.name, tmp_build_dir)
 
 				// run builder
@@ -194,6 +197,7 @@ install_package :: proc(ark_dir: string, options: []string) -> (exit_code: int) 
 				)
 				return 1
 			}
+			defer delete(tmp_build_dir, context.allocator)
 			defer git.remove_worktree(parent_path, repo_data.name, tmp_build_dir)
 
 			// run builder
@@ -228,6 +232,7 @@ install_package :: proc(ark_dir: string, options: []string) -> (exit_code: int) 
 			fmt.eprintln("Failed to checkout SHA to temporary build directory.")
 			return 1
 		}
+		defer delete(tmp_build_dir, context.allocator)
 		defer git.remove_worktree(parent_path, repo_data.name, tmp_build_dir)
 
 		// run builder
@@ -242,16 +247,17 @@ install_package :: proc(ark_dir: string, options: []string) -> (exit_code: int) 
 		fmt.println("Updating lock")
 		append(
 			&lock_data.data,
+			// Same as lock_data, can we do this without cloning every piece?
 			shared.Entry {
-				name      = repo_data.name,
-				version   = repo_data.spec,
-				sha       = ref_sha,
-				url       = repo_data.url,
+				name      = strings.clone(repo_data.name),
+				version   = strings.clone(repo_data.spec),
+				sha       = strings.clone(ref_sha),
+				url       = strings.clone(repo_data.url),
 				// TODO: add in the binary title from the builder
-				binary    = "placeholder",
+				binary    = strings.clone("placeholder"),
 				timestamp = time.to_unix_seconds(time.now()),
-				ref_kind  = ref_kind,
-				ref_name  = ref_name,
+				ref_kind  = strings.clone(ref_kind),
+				ref_name  = strings.clone(ref_name),
 			},
 		)
 

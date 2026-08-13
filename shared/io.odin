@@ -21,6 +21,7 @@ check_file_or_folder_exists :: proc(path_to_file_or_folder: string) -> bool {
 // This takes in a binary name, and returns the path that the symlink points to
 resolve_symlink_to_path :: proc(ark_dir: string, binary_name: string) -> string {
 	sym_link_path, _ := os.join_path({ark_dir, "bin", binary_name}, context.allocator)
+	defer delete(sym_link_path, context.allocator)
 
 	// Verify the binary exists. If not, its not installed. We need to use the packages bin name
 	if !check_file_or_folder_exists(sym_link_path) {
@@ -30,7 +31,6 @@ resolve_symlink_to_path :: proc(ark_dir: string, binary_name: string) -> string 
 	// resolve symlink
 	resolved_path, sym_read_error := os.read_link(sym_link_path, context.allocator)
 	defer delete(resolved_path, context.allocator)
-	delete(sym_link_path, context.allocator)
 
 	return strings.clone(resolved_path)
 }
