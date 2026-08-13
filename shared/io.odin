@@ -1,14 +1,11 @@
-
-#+feature dynamic-literals
 package shared
 
+import "core:bytes"
 import "core:encoding/json"
 import "core:fmt"
 import "core:os"
 import "core:strconv"
 import "core:strings"
-
-import "../shared"
 
 check_file_or_folder_exists :: proc(path_to_file_or_folder: string) -> bool {
 	if os.is_dir(path_to_file_or_folder) {
@@ -25,7 +22,7 @@ resolve_symlink_to_path :: proc(ark_dir: string, binary_name: string) -> string 
 	sym_link_path, _ := os.join_path({ark_dir, "bin", binary_name}, context.allocator)
 
 	// Verify the binary exists. If not, its not installed. We need to use the packages bin name
-	if !shared.check_file_or_folder_exists(sym_link_path) {
+	if !check_file_or_folder_exists(sym_link_path) {
 		return ""
 	}
 
@@ -97,7 +94,6 @@ find_entry :: proc(
 	return
 }
 
-
 read_lock :: proc(ark_dir: string) -> (lock_data: Lock_Data, ok: bool) {
 	ark_lock_path, ark_lock_path_error := os.join_path({ark_dir, "ark.lock"}, context.allocator)
 	defer delete(ark_lock_path, context.allocator)
@@ -113,53 +109,64 @@ read_lock :: proc(ark_dir: string) -> (lock_data: Lock_Data, ok: bool) {
 		return {}, false
 	}
 
-	lines := strings.split(string(lock_file), "\n", context.allocator)
-	defer delete(lines, context.allocator)
 
-	for &line, index in lines {
-		line = strings.trim_space(line)
-		if line == "" || strings.starts_with(line, "#") {
+	cursor := lock_file
+	index: u16 = 0
+	for line_bytes in bytes.split_iterator(&cursor, []byte{'\n'}) {
+		trimmed_line_bytes := bytes.trim_space(line_bytes)
+		if len(trimmed_line_bytes) == 0 || bytes.has_prefix(trimmed_line_bytes, []byte{'#'}) {
+			index += 1
 			continue
 		}
 
-		parts := strings.fields(line, context.allocator)
-		if len(parts) != 6 && len(parts) != 8 {
+		// puts the line bytes into an array of bytes
+		parts: [8][]byte
+		count: u8 = 0
+		for part in bytes.split_iterator(&trimmed_line_bytes, []byte{' '}) {
+			if count >= len(parts) {
+				fmt.eprintfln("invalid ark.lock entry at ~/.ark/ark.lock:%i", index + 1)
+
+				free_lock_data(&lock_data, context.allocator)
+
+				return {}, false
+			}
+			parts[count] = part
+			count += 1
+		}
+
+		if count != len(parts) {
 			fmt.eprintfln("invalid ark.lock entry at ~/.ark/ark.lock:%i", index + 1)
-			delete(parts, context.allocator)
-			delete(lock_data.data)
+
+			free_lock_data(&lock_data, context.allocator)
+
 			return {}, false
 		}
 
-		timestamp, ok := strconv.parse_i64(parts[5])
+		timestamp, ok := strconv.parse_i64(string(parts[5]))
 		if !ok {
 			fmt.eprintfln("invalid timestamp at ~/.ark/ark.lock:%i", index + 1)
-			delete(lock_data.data)
+
+			free_lock_data(&lock_data, context.allocator)
+
 			return {}, false
 		}
 
-		ref_kind := REF_KIND_LEGACY
-		ref_name := parts[1]
-		if len(parts) == 8 {
-			ref_kind = parts[6]
-			ref_name = parts[7]
-		}
-
+		// TODO: dont copy every single property of the entry. Maybe allocate an arena at the beginning and use that, or something. Im not sure actually. The copy can get expensive if someone has many versions installed and wants to install a new one, or want to uninstall/list all of them.
 		append(
 			&lock_data.data,
-			shared.Entry {
-				name = strings.clone(parts[0], context.allocator),
-				version = strings.clone(parts[1], context.allocator),
-				sha = strings.clone(parts[2], context.allocator),
-				url = strings.clone(parts[3], context.allocator),
-				binary = strings.clone(parts[4], context.allocator),
+			Entry {
+				name = strings.clone(string(parts[0]), context.allocator),
+				version = strings.clone(string(parts[1]), context.allocator),
+				sha = strings.clone(string(parts[2]), context.allocator),
+				url = strings.clone(string(parts[3]), context.allocator),
+				binary = strings.clone(string(parts[4]), context.allocator),
 				timestamp = timestamp,
-				ref_kind = strings.clone(ref_kind, context.allocator),
-				ref_name = strings.clone(ref_name, context.allocator),
+				ref_kind = strings.clone(string(parts[6]), context.allocator),
+				ref_name = strings.clone(string(parts[7]), context.allocator),
 			},
 		)
-		delete(parts, context.allocator)
+		index += 1
 	}
-
 
 	return lock_data, true
 }
@@ -301,4 +308,22 @@ repo_path_from_url :: proc(
 	parent, _ = os.join_path(parts[:], allocator)
 
 	return parent, name, true
+}
+
+free_lock_data :: proc(lock_data: ^Lock_Data, allocator := context.allocator) {
+	assert(lock_data != nil)
+
+	for entry in lock_data.data {
+		delete(entry.name, allocator)
+		delete(entry.version, allocator)
+		delete(entry.sha, allocator)
+		delete(entry.url, allocator)
+		delete(entry.binary, allocator)
+		delete(entry.ref_kind, allocator)
+		delete(entry.ref_name, allocator)
+	}
+
+	// A dynamic array carries its own allocator, so delete takes no specified allocator
+	delete(lock_data.data)
+	lock_data.data = nil
 }

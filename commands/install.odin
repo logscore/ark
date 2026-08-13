@@ -7,6 +7,7 @@ import "core:os"
 import "core:strings"
 import "core:time"
 
+import builder "../builder"
 import git "../git"
 import shared "../shared"
 
@@ -121,6 +122,12 @@ install_package :: proc(ark_dir: string, options: []string) {
 
 				// run builder
 				fmt.println("Running builder")
+				binary, artifact_path, error := builder.build_package(
+					ark_dir,
+					tmp_build_dir,
+					repo_data.name,
+				)
+
 				// run lock updater
 				fmt.println("Updating lock")
 				lock_data.data[installed_index].timestamp = time.to_unix_seconds(time.now())
@@ -183,6 +190,12 @@ install_package :: proc(ark_dir: string, options: []string) {
 
 			// run builder
 			fmt.println("Running builder")
+			binary, artifact_path, error := builder.build_package(
+				ark_dir,
+				tmp_build_dir,
+				repo_data.name,
+			)
+
 			// run lock updater
 			fmt.println("Updating lock")
 			lock_data.data[installed_index].timestamp = time.to_unix_seconds(time.now())
@@ -211,6 +224,12 @@ install_package :: proc(ark_dir: string, options: []string) {
 
 		// run builder
 		fmt.println("Running builder")
+		binary, artifact_path, error := builder.build_package(
+			ark_dir,
+			tmp_build_dir,
+			repo_data.name,
+		)
+
 		// run lock updater
 		fmt.println("Updating lock")
 		append(

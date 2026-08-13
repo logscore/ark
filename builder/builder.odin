@@ -1,24 +1,42 @@
 package builder
 
-// The builder makes a binary from a source checkout.
-//
-// This is the only stage that runs commands from the outside world. It must not
-// change installed state. It reads the checkout, writes in the checkout, and
-// reports where the artifact is. The installer moves the artifact after this.
-//
-// Input:
-//   ark_dir     absolute path of ~/.ark
-//   source_dir  temporary worktree from git.checkout_to_sha
-//   name        package name that install parsed from the repository path
-//
-// Output:
-//   binary         command name that the user calls. It is the base name of `out`.
-//                  It can differ from `name`. The lock entry and the symlink use
-//                  this value, not `name`.
-//   artifact_path  absolute path of the built file in source_dir
-//   error          one value for each failure below. Do not exit from this package.
-//                  The command layer prints and exits.
-//
+import shared "../shared"
+
+build_package :: proc(
+	ark_dir: string,
+	tmp_build_dir: string,
+	package_name: string,
+) -> (
+	binary: string,
+	artifact_path: string,
+	error: string,
+) {
+	// Walk from base directory to ark_dir, falling back to autodetection. Return the array of shared.Packages
+	build_recipes := walk_directories_for_ark_config(ark_dir)
+	// iterate over and find the package whose name matched. Save in single variable. Stream it in?
+	// If file isnt there, fallback to autodetection
+	// if not in file, fallbakc to autodetection
+	// If not present, fallback to autodetection. Prioritize optimized builds
+	// If more than one build marker is detected (Cargo.tom and go.mod in same dir, error out and tell the user to config in ark.json)
+
+	// find the tool from the build recipe on PATH
+	// validate the version. Versions are exact.
+	// If not there, error (THIS IS WHERE WE'D DO THE uv-LIKE TOOL CACHE)
+	// Run the build. Run build in build_dir, apply the package.env, pip stdout and stderr to user
+	// Validate result. join build dir with the project "out" and verify the artifact is a file
+	// Return the build output file path for the installer package
+
+	return "", "", ""
+}
+
+walk_directories_for_ark_config :: proc(ark_dir: string) -> shared.User_Config {
+	// Check current working directory
+	// Check ark dir
+	// If none found, return
+	return {}
+}
+
+
 // Step 1: find the build recipe. Use this order:
 //   a. ark.json in the root of source_dir. The repository declares its own build.
 //   b. ark.json in ark_dir. The user supplies or overrides the build.

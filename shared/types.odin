@@ -5,7 +5,6 @@ REF_KIND_TAG :: "tag"
 REF_KIND_BRANCH :: "branch"
 REF_KIND_COMMIT :: "commit"
 REF_KIND_DEFAULT :: "default"
-REF_KIND_LEGACY :: "legacy"
 
 Repo :: struct {
 	url:         string,
